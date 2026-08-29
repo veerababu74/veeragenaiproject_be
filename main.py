@@ -9,6 +9,7 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pymongo.errors import PyMongoError
 
 from Authentication.config import settings
 from Authentication.database import close_database, users
@@ -112,6 +113,12 @@ async def log_validation_error(request: Request, error: RequestValidationError):
 	issues = ", ".join(f"{'.'.join(map(str, issue['loc']))}: {issue['msg']}" for issue in error.errors())
 	logger.warning("%s %s validation failed | %s", request.method, request.url.path, issues)
 	return await request_validation_exception_handler(request, error)
+
+
+@app.exception_handler(PyMongoError)
+async def mongodb_unavailable(request: Request, error: PyMongoError):
+	logger.error("%s %s database unavailable | %s", request.method, request.url.path, error)
+	return JSONResponse(status_code=503, content={"detail": "Database is temporarily unavailable"})
 
 
 @app.middleware("http")

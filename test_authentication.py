@@ -46,6 +46,21 @@ class AuthenticationValidationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         initialize_mongodb.assert_not_awaited()
 
+    def test_login_returns_service_unavailable_when_mongodb_is_unreachable(self):
+        with patch.dict("os.environ", {"VERCEL": "1"}), patch(
+            "Authentication.router.users.find_one",
+            new_callable=AsyncMock,
+            side_effect=ServerSelectionTimeoutError("unavailable"),
+        ), patch("main.close_database", new_callable=AsyncMock):
+            with TestClient(app) as client:
+                response = client.post(
+                    "/auth/login",
+                    json={"email": "demo@veeragenai.com", "password": "VeeraDemo@2026"},
+                )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"detail": "Database is temporarily unavailable"})
+
     def test_supported_and_unsupported_email_domains(self):
         request = RegisterRequest(email="user@gmail.com", password="password123")
         self.assertEqual(request.email, "user@gmail.com")
