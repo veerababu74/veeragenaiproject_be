@@ -45,7 +45,9 @@ async def lifespan(_: FastAPI):
 	basic_rag_database.initialize()
 	advanced_rag_database.initialize()
 	workspace_agent_database.initialize()
+	logger.info("SQLite startup complete | connecting to MongoDB")
 	await users.create_index("email", unique=True)
+	logger.info("MongoDB connection established | running user migrations")
 	await users.update_many({"role": {"$exists": False}}, {"$set": {"role": "user"}})
 	await users.update_many({"is_active": {"$exists": False}}, {"$set": {"is_active": True}})
 	await users.update_many({"blocked_projects": {"$exists": False}}, {"$set": {"blocked_projects": []}})
@@ -78,6 +80,7 @@ async def lifespan(_: FastAPI):
 	await ensure_basic_rag_project()
 	await ensure_advanced_rag_project()
 	await ensure_google_workspace_agent_project()
+	logger.info("MongoDB catalog migrations complete")
 	if settings.admin_email_set:
 		await users.update_many(
 			{"role": "admin", "email": {"$nin": list(settings.admin_email_set)}},
