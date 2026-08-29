@@ -11,6 +11,7 @@ from basichatapp.database import (
     cleanup_expired,
     create_session,
     get_messages,
+    get_session,
     initialize,
     list_sessions,
     update_session_title,
@@ -54,6 +55,12 @@ class BasicChatDatabaseTests(unittest.TestCase):
         self.assertEqual(len(get_messages(session["id"], self.database_path)), 2)
         cleanup_expired(self.database_path, now=renewed_expiry)
         self.assertEqual(get_messages(session["id"], self.database_path), [])
+
+    def test_expired_session_cannot_be_opened_directly(self):
+        with patch("basichatapp.database.time.time", return_value=100):
+            session = create_session("user-1", "gemini", "gemini-test", "First", self.database_path)
+        with patch("basichatapp.database.time.time", return_value=100 + 24 * 60 * 60):
+            self.assertIsNone(get_session(session["id"], "user-1", self.database_path))
 
     def test_initialize_migrates_legacy_expiry_from_latest_interaction(self):
         with patch("basichatapp.database.time.time", return_value=100):

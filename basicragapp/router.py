@@ -12,7 +12,7 @@ from Authentication.security import current_user_id, has_project_access
 from basichatapp.providers import ProviderError, chat
 
 from . import bucket_storage, database, vector_store
-from .database import DuplicateDocumentError
+from .database import DuplicateDocumentError, StorageQuotaError
 from .chunking import chunk_text, recursive_chunks, semantic_chunks, sentences
 from .documents import DocumentError, MAX_FILE_SIZE, extract_text
 from .embeddings import EmbeddingError, embed_texts
@@ -49,6 +49,18 @@ def _make_chunks(strategy, text, chunk_size, overlap, embedding_api_key, embeddi
     return [chunk for block in semantic_chunks(units, vectors) for chunk in recursive_chunks(block, chunk_size, overlap)]
 
 
+def _check_storage_quota(storage, user_id, size):
+    used = storage.document_storage_used(user_id)
+    if used + size > storage.MAX_USER_STORAGE:
+        remaining_mb = max(0, storage.MAX_USER_STORAGE - used) / (1024 * 1024)
+        raise StorageQuotaError(f"Only {remaining_mb:.2f} MB of the 5 MB document allowance remains")
+
+
+def _storage_payload(storage, user_id):
+    used = storage.document_storage_used(user_id)
+    return {"used": used, "limit": storage.MAX_USER_STORAGE, "remaining": storage.MAX_USER_STORAGE - used}
+
+
 def _session_payload(session, user_id):
     return {
         "session": session,
@@ -71,6 +83,11 @@ def _rollback_document(user_id, document_id, chunk_count, remote_path):
 @router.get("/sessions")
 async def sessions(user_id: str = Depends(rag_user_id)):
     return await asyncio.to_thread(database.list_sessions, user_id)
+
+
+@router.get("/storage")
+async def storage(user_id: str = Depends(rag_user_id)):
+    return await asyncio.to_thread(_storage_payload, database, user_id)
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
@@ -139,6 +156,7 @@ async def upload_document(
     remote_path = f"users/{user_id}/sessions/{session_id}/documents/{document_id}{Path(filename).suffix.lower()}"
     logger.info("Indexing document | session=%s | document=%s | filename=%s | strategy=%s", session_id, document_id, filename, strategy)
     try:
+        await asyncio.to_thread(_check_storage_quota, database, user_id, len(content))
         text = await asyncio.to_thread(extract_text, filename, content)
         chunks = await asyncio.to_thread(_make_chunks, strategy, text, chunk_size, overlap, embedding_api_key, embedding_model)
         vectors = await asyncio.to_thread(embed_texts, embedding_api_key, embedding_model, chunks, "RETRIEVAL_DOCUMENT")

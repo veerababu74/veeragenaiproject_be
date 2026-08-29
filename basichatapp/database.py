@@ -91,6 +91,7 @@ def create_session(user_id, provider, model, message, database_path=DATABASE_PAT
 
 
 def get_session(session_id, user_id, database_path=DATABASE_PATH):
+    cleanup_expired(database_path)
     with connect(database_path) as connection:
         row = connection.execute(
             "SELECT * FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_id)

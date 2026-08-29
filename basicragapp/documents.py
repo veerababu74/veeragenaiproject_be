@@ -6,7 +6,7 @@ from pypdf import PdfReader
 
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
-MAX_FILE_SIZE = 10 * 1024 * 1024
+MAX_FILE_SIZE = 5 * 1024 * 1024
 
 
 class DocumentError(ValueError):
@@ -20,7 +20,7 @@ def extract_text(filename: str, content: bytes) -> str:
     if not content:
         raise DocumentError("The document is empty")
     if len(content) > MAX_FILE_SIZE:
-        raise DocumentError("The document exceeds the 10 MB limit")
+        raise DocumentError("The document exceeds the 5 MB limit")
 
     try:
         if extension == ".pdf":

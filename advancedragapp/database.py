@@ -6,6 +6,8 @@ from basicragapp import database as base
 
 DATABASE_PATH = settings.sqlite_path("advanced_rag.db", Path(__file__).resolve().parent)
 DuplicateDocumentError = base.DuplicateDocumentError
+StorageQuotaError = base.StorageQuotaError
+MAX_USER_STORAGE = base.MAX_USER_STORAGE
 
 
 def initialize():
@@ -34,6 +36,10 @@ def get_document(document_id, user_id):
 
 def find_document_by_hash(user_id, content_hash):
     return base.find_document_by_hash(user_id, content_hash, DATABASE_PATH)
+
+
+def document_storage_used(user_id):
+    return base.document_storage_used(user_id, DATABASE_PATH)
 
 
 def save_document(document_id, session_id, filename, content_type, size, strategy, chunk_size, overlap, remote_path, chunks, content_hash):

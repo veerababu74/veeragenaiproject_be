@@ -9,9 +9,15 @@ from Authentication.config import settings
 
 
 DATABASE_PATH = settings.sqlite_path("basic_rag.db", Path(__file__).resolve().parent)
+RETENTION_SECONDS = 24 * 60 * 60
+MAX_USER_STORAGE = 5 * 1024 * 1024
 
 
 class DuplicateDocumentError(ValueError):
+    pass
+
+
+class StorageQuotaError(ValueError):
     pass
 
 
@@ -78,7 +84,14 @@ def initialize(database_path=DATABASE_PATH):
         )
 
 
+def cleanup_expired(database_path=DATABASE_PATH, now=None):
+    cutoff = (now or int(time.time())) - RETENTION_SECONDS
+    with connect(database_path) as connection:
+        connection.execute("DELETE FROM sessions WHERE updated_at <= ?", (cutoff,))
+
+
 def create_session(user_id, provider, model, embedding_model, database_path=DATABASE_PATH):
+    cleanup_expired(database_path)
     now = int(time.time())
     session = {"id": uuid4().hex, "user_id": user_id, "title": "New RAG chat", "provider": provider,
                "model": model, "embedding_model": embedding_model, "created_at": now, "updated_at": now}
@@ -88,12 +101,14 @@ def create_session(user_id, provider, model, embedding_model, database_path=DATA
 
 
 def get_session(session_id, user_id, database_path=DATABASE_PATH):
+    cleanup_expired(database_path)
     with connect(database_path) as connection:
         row = connection.execute("SELECT * FROM sessions WHERE id=? AND user_id=?", (session_id, user_id)).fetchone()
     return dict(row) if row else None
 
 
 def list_sessions(user_id, database_path=DATABASE_PATH):
+    cleanup_expired(database_path)
     with connect(database_path) as connection:
         rows = connection.execute("SELECT * FROM sessions WHERE user_id=? ORDER BY updated_at DESC, rowid DESC", (user_id,)).fetchall()
     return [dict(row) for row in rows]
@@ -123,6 +138,7 @@ def get_document(document_id, user_id, database_path=DATABASE_PATH):
 
 
 def find_document_by_hash(user_id, content_hash, database_path=DATABASE_PATH):
+    cleanup_expired(database_path)
     with connect(database_path) as connection:
         row = connection.execute(
             "SELECT * FROM documents WHERE user_id=? AND content_hash=?", (user_id, content_hash)
@@ -130,12 +146,29 @@ def find_document_by_hash(user_id, content_hash, database_path=DATABASE_PATH):
     return dict(row) if row else None
 
 
+def document_storage_used(user_id, database_path=DATABASE_PATH):
+    cleanup_expired(database_path)
+    with connect(database_path) as connection:
+        row = connection.execute(
+            "SELECT COALESCE(SUM(size), 0) AS total FROM documents WHERE user_id=?", (user_id,)
+        ).fetchone()
+    return row["total"]
+
+
 def save_document(document_id, session_id, filename, content_type, size, strategy, chunk_size, overlap, remote_path, chunks, database_path=DATABASE_PATH, content_hash=None):
     now = int(time.time())
     with connect(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("DELETE FROM sessions WHERE updated_at <= ?", (now - RETENTION_SECONDS,))
         session = connection.execute("SELECT user_id FROM sessions WHERE id=?", (session_id,)).fetchone()
         if not session:
             return None
+        used = connection.execute(
+            "SELECT COALESCE(SUM(size), 0) FROM documents WHERE user_id=?", (session["user_id"],)
+        ).fetchone()[0]
+        if used + size > MAX_USER_STORAGE:
+            remaining_mb = max(0, MAX_USER_STORAGE - used) / (1024 * 1024)
+            raise StorageQuotaError(f"Only {remaining_mb:.2f} MB of the 5 MB document allowance remains")
         document = {"id": document_id, "session_id": session_id, "user_id": session["user_id"], "content_hash": content_hash,
                 "filename": filename, "content_type": content_type,
                 "size": size, "strategy": strategy, "chunk_size": chunk_size, "overlap": overlap,
@@ -176,6 +209,7 @@ def add_exchange(session_id, question, answer, sources, database_path=DATABASE_P
     now = int(time.time())
     with connect(database_path) as connection:
         connection.execute("BEGIN IMMEDIATE")
+        connection.execute("DELETE FROM sessions WHERE updated_at <= ?", (now - RETENTION_SECONDS,))
         if not connection.execute("SELECT 1 FROM sessions WHERE id=?", (session_id,)).fetchone():
             return False
         connection.executemany(

@@ -15,7 +15,7 @@ from basicragapp.database import DuplicateDocumentError
 from basicragapp.documents import DocumentError, MAX_FILE_SIZE, extract_text
 from basicragapp.embeddings import EmbeddingError, embed_texts
 from basicragapp.models import ChunkStrategy, RagChatRequest, SessionCreateRequest
-from basicragapp.router import _make_chunks, _rollback_document
+from basicragapp.router import _check_storage_quota, _make_chunks, _rollback_document, _storage_payload
 
 from . import database
 from .pipeline import run_pipeline
@@ -52,6 +52,11 @@ def _session_payload(session, user_id):
 @router.get("/sessions")
 async def sessions(user_id: str = Depends(advanced_rag_user_id)):
     return await asyncio.to_thread(database.list_sessions, user_id)
+
+
+@router.get("/storage")
+async def storage(user_id: str = Depends(advanced_rag_user_id)):
+    return await asyncio.to_thread(_storage_payload, database, user_id)
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
@@ -120,6 +125,7 @@ async def upload_document(
     remote_path = f"users/{user_id}/advanced-rag/{session_id}/documents/{document_id}{Path(filename).suffix.lower()}"
     logger.info("Indexing document | session=%s | document=%s | hash=%s", session_id, document_id, content_hash[:12])
     try:
+        await asyncio.to_thread(_check_storage_quota, database, user_id, len(content))
         text = await asyncio.to_thread(extract_text, filename, content)
         chunks = await asyncio.to_thread(_make_chunks, strategy, text, chunk_size, overlap, embedding_api_key, embedding_model)
         vectors = await asyncio.to_thread(embed_texts, embedding_api_key, embedding_model, chunks, "RETRIEVAL_DOCUMENT")

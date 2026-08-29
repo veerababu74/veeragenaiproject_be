@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from basicragapp import bucket_storage, vector_store
 from basicragapp.chunking import fixed_chunks, recursive_chunks, semantic_chunks
 from basicragapp.documents import DocumentError, extract_text
-from basicragapp.database import DuplicateDocumentError, add_exchange, create_session, delete_session, find_document_by_hash, get_session, initialize, list_documents, save_document
+from basicragapp.database import DuplicateDocumentError, RETENTION_SECONDS, StorageQuotaError, add_exchange, create_session, delete_session, document_storage_used, find_document_by_hash, get_session, initialize, list_documents, save_document
 from basicragapp.embeddings import EMBEDDING_DIMENSION, EmbeddingError, embed_texts
 from basicragapp.models import RagChatRequest
 from basicragapp.router import _http_error, _rollback_document, send_message
@@ -104,6 +104,26 @@ class BasicRagOwnershipTests(unittest.TestCase):
         delete_session(session["id"], "user-1", self.database_path)
 
         self.assertFalse(add_exchange(session["id"], "question", "answer", [], self.database_path))
+
+    def test_user_has_five_mb_document_allowance(self):
+        session = create_session("user-1", "gemini", "gemini-test", "gemini-embedding-001", self.database_path)
+        one_mb = 1024 * 1024
+        save_document("doc-1", session["id"], "one.txt", "text/plain", one_mb, "fixed", 100, 10, "private/one", ["one"], self.database_path)
+
+        self.assertEqual(document_storage_used("user-1", self.database_path), one_mb)
+        save_document("doc-2", session["id"], "four.txt", "text/plain", 4 * one_mb, "fixed", 100, 10, "private/four", ["four"], self.database_path)
+        with self.assertRaisesRegex(StorageQuotaError, "0.00 MB"):
+            save_document("doc-3", session["id"], "extra.txt", "text/plain", 1, "fixed", 100, 10, "private/extra", ["extra"], self.database_path)
+
+    def test_rag_sessions_expire_24_hours_after_last_update(self):
+        with patch("basicragapp.database.time.time", return_value=100):
+            session = create_session("user-1", "gemini", "gemini-test", "gemini-embedding-001", self.database_path)
+        with patch("basicragapp.database.time.time", return_value=1000):
+            add_exchange(session["id"], "question", "answer", [], self.database_path)
+        with patch("basicragapp.database.time.time", return_value=1000 + RETENTION_SECONDS - 1):
+            self.assertIsNotNone(get_session(session["id"], "user-1", self.database_path))
+        with patch("basicragapp.database.time.time", return_value=1000 + RETENTION_SECONDS):
+            self.assertIsNone(get_session(session["id"], "user-1", self.database_path))
 
     def test_document_hash_is_scoped_to_user_across_sessions(self):
         first = create_session("user-1", "gemini", "gemini-test", "gemini-embedding-001", self.database_path)
