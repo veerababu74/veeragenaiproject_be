@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import logging
+import os
 from time import perf_counter
 
 from bson import ObjectId
@@ -32,22 +33,9 @@ logging.basicConfig(
 logger = logging.getLogger("veera.api")
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-	logger.info(
-		"Starting API | frontend=%s | huggingface=%s | pinecone=%s",
-		settings.frontend_url,
-		"configured" if settings.huggingface_token else "missing",
-		"configured" if settings.pinecone_api_key else "missing",
-	)
-	basic_chat_database.initialize()
-	basic_chat_database.cleanup_expired()
-	basic_rag_database.initialize()
-	advanced_rag_database.initialize()
-	workspace_agent_database.initialize()
-	logger.info("SQLite startup complete | connecting to MongoDB")
+async def initialize_mongodb():
+	logger.info("Connecting to MongoDB | running startup migrations")
 	await users.create_index("email", unique=True)
-	logger.info("MongoDB connection established | running user migrations")
 	await users.update_many({"role": {"$exists": False}}, {"$set": {"role": "user"}})
 	await users.update_many({"is_active": {"$exists": False}}, {"$set": {"is_active": True}})
 	await users.update_many({"blocked_projects": {"$exists": False}}, {"$set": {"blocked_projects": []}})
@@ -80,7 +68,6 @@ async def lifespan(_: FastAPI):
 	await ensure_basic_rag_project()
 	await ensure_advanced_rag_project()
 	await ensure_google_workspace_agent_project()
-	logger.info("MongoDB catalog migrations complete")
 	if settings.admin_email_set:
 		await users.update_many(
 			{"role": "admin", "email": {"$nin": list(settings.admin_email_set)}},
@@ -90,6 +77,27 @@ async def lifespan(_: FastAPI):
 			{"email": {"$in": list(settings.admin_email_set)}, "role": {"$ne": "demo"}},
 			{"$set": {"role": "admin"}},
 		)
+	logger.info("MongoDB startup migrations complete")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+	logger.info(
+		"Starting API | frontend=%s | huggingface=%s | pinecone=%s",
+		settings.frontend_url,
+		"configured" if settings.huggingface_token else "missing",
+		"configured" if settings.pinecone_api_key else "missing",
+	)
+	basic_chat_database.initialize()
+	basic_chat_database.cleanup_expired()
+	basic_rag_database.initialize()
+	advanced_rag_database.initialize()
+	workspace_agent_database.initialize()
+	logger.info("SQLite startup complete")
+	if os.getenv("VERCEL"):
+		logger.info("Skipping MongoDB migrations during Vercel cold start")
+	else:
+		await initialize_mongodb()
 	logger.info("API startup complete")
 	yield
 	logger.info("Shutting down API")

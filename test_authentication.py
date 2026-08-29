@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import AsyncMock, patch
 
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from Admin.landing import (
@@ -17,6 +18,7 @@ from Authentication.models import RegisterRequest, ResetPasswordRequest, UpdateU
 from Authentication.cloudinary_storage import configuration_error, delete_profile_picture, upload_project_image
 from Authentication.router import reset_password
 from Authentication.security import create_otp, has_project_access, hash_otp, password_hash
+from main import app
 
 
 class AuthenticationValidationTests(unittest.TestCase):
@@ -32,6 +34,16 @@ class AuthenticationValidationTests(unittest.TestCase):
             ):
                 database_path = settings.sqlite_path("project.db", Path("/var/data"))
         self.assertEqual(database_path, Path(temporary_directory) / "veeragenai" / "project.db")
+
+    def test_vercel_startup_does_not_wait_for_mongodb_migrations(self):
+        with patch.dict("os.environ", {"VERCEL": "1"}), patch(
+            "main.initialize_mongodb", new_callable=AsyncMock
+        ) as initialize_mongodb, patch("main.close_database", new_callable=AsyncMock):
+            with TestClient(app) as client:
+                response = client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        initialize_mongodb.assert_not_awaited()
 
     def test_supported_and_unsupported_email_domains(self):
         request = RegisterRequest(email="user@gmail.com", password="password123")
