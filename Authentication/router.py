@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 
 from bson import ObjectId
@@ -6,11 +8,13 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from pymongo.errors import DuplicateKeyError
 
+from .account_deletion import delete_user_workspace_data
 from .config import settings
 from .cloudinary_storage import delete_profile_picture, is_configured, upload_profile_picture
 from .database import users
 from .mailer import send_password_reset_email, send_verification_email
 from .models import (
+    DeleteAccountRequest,
     EmailRequest,
     GoogleLoginRequest,
     LoginRequest,
@@ -30,7 +34,9 @@ from .security import (
 )
 
 
+logger = logging.getLogger("veera.auth")
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
 
 
 def user_response(user):
@@ -334,3 +340,39 @@ async def session(user_id: str | None = Depends(optional_user_id)):
         return None
     user = await users.find_one({"_id": ObjectId(user_id)})
     return user_response(user) if user and user.get("is_active", True) else None
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(data: DeleteAccountRequest, response: Response, user_id: str = Depends(current_user_id)):
+    user = await users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") == "demo":
+        raise HTTPException(status_code=403, detail="The demo account cannot be deleted")
+    if user["provider"] == "email":
+        if not data.password or not password_hash.verify(data.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Incorrect password")
+    else:
+        if not data.credential:
+            raise HTTPException(status_code=401, detail="Re-authenticate with Google to confirm deletion")
+        try:
+            info = id_token.verify_oauth2_token(
+                data.credential, google_requests.Request(), settings.google_client_id
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=401, detail="Invalid Google credential") from error
+        if info.get("sub") != user.get("google_sub") or info.get("email", "").lower() != user["email"]:
+            raise HTTPException(status_code=401, detail="This Google account does not match the signed-in account")
+    if user.get("profile_picture_public_id"):
+        try:
+            await delete_profile_picture(user["profile_picture_public_id"])
+        except Exception:
+            logger.warning("Could not remove profile picture during account deletion | user=%s", user_id)
+    await asyncio.to_thread(delete_user_workspace_data, user, settings.jwt_secret)
+    await users.delete_one({"_id": user["_id"]})
+    response.delete_cookie(
+        "access_token",
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+    )

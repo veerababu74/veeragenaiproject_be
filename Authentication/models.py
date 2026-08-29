@@ -50,6 +50,11 @@ class GoogleLoginRequest(BaseModel):
     credential: str
 
 
+class DeleteAccountRequest(BaseModel):
+    password: str | None = None
+    credential: str | None = None
+
+
 class UpdateUserRequest(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=80)
     first_name: str | None = Field(default=None, max_length=50)

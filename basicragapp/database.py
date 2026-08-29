@@ -155,6 +155,19 @@ def document_storage_used(user_id, database_path=DATABASE_PATH):
     return row["total"]
 
 
+def list_all_documents(user_id, database_path=DATABASE_PATH):
+    with connect(database_path) as connection:
+        rows = connection.execute(
+            "SELECT id, chunk_count, remote_path FROM documents WHERE user_id=?", (user_id,)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def delete_all_sessions(user_id, database_path=DATABASE_PATH):
+    with connect(database_path) as connection:
+        connection.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+
+
 def save_document(document_id, session_id, filename, content_type, size, strategy, chunk_size, overlap, remote_path, chunks, database_path=DATABASE_PATH, content_hash=None):
     now = int(time.time())
     with connect(database_path) as connection:

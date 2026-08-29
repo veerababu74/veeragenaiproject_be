@@ -132,3 +132,8 @@ def delete_session(session_id, user_id):
     with connect() as connection:
         cursor = connection.execute("DELETE FROM sessions WHERE id=? AND user_id=?", (session_id, user_id))
     return cursor.rowcount > 0
+
+
+def delete_all_sessions(user_id):
+    with connect() as connection:
+        connection.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))

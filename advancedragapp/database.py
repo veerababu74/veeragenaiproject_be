@@ -42,6 +42,14 @@ def document_storage_used(user_id):
     return base.document_storage_used(user_id, DATABASE_PATH)
 
 
+def list_all_documents(user_id):
+    return base.list_all_documents(user_id, DATABASE_PATH)
+
+
+def delete_all_sessions(user_id):
+    return base.delete_all_sessions(user_id, DATABASE_PATH)
+
+
 def save_document(document_id, session_id, filename, content_type, size, strategy, chunk_size, overlap, remote_path, chunks, content_hash):
     return base.save_document(
         document_id, session_id, filename, content_type, size, strategy, chunk_size,

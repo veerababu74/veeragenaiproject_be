@@ -3,7 +3,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -15,10 +15,11 @@ from Admin.landing import (
 )
 from Admin.models import AdminUpdateUserRequest, LandingContent, ProjectCatalog
 from Authentication.config import settings
-from Authentication.models import RegisterRequest, ResetPasswordRequest, UpdateUserRequest, UserResponse
+from Authentication.models import DeleteAccountRequest, RegisterRequest, ResetPasswordRequest, UpdateUserRequest, UserResponse
 from Authentication.cloudinary_storage import configuration_error, delete_profile_picture, upload_project_image
-from Authentication.router import reset_password
+from Authentication.router import delete_account, reset_password
 from Authentication.security import create_otp, has_project_access, hash_otp, password_hash
+from fastapi import HTTPException
 from main import app
 
 
@@ -252,6 +253,71 @@ class PasswordResetTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             changes["$unset"], {"password_reset_otp": "", "password_reset_expires": ""}
         )
+
+
+class AccountDeletionTests(unittest.IsolatedAsyncioTestCase):
+    @patch("Authentication.router.delete_user_workspace_data")
+    @patch("Authentication.router.users.delete_one", new_callable=AsyncMock)
+    @patch("Authentication.router.users.find_one", new_callable=AsyncMock)
+    async def test_email_account_requires_correct_password(self, find_one, delete_one, cleanup):
+        find_one.return_value = {
+            "_id": "507f1f77bcf86cd799439011", "provider": "email", "role": "user",
+            "password_hash": password_hash.hash("correct-password"),
+        }
+        with self.assertRaises(HTTPException) as raised:
+            await delete_account(DeleteAccountRequest(password="wrong-password"), response=Mock(), user_id="507f1f77bcf86cd799439011")
+        self.assertEqual(raised.exception.status_code, 401)
+        delete_one.assert_not_awaited()
+        cleanup.assert_not_called()
+
+    @patch("Authentication.router.delete_user_workspace_data")
+    @patch("Authentication.router.users.delete_one", new_callable=AsyncMock)
+    @patch("Authentication.router.users.find_one", new_callable=AsyncMock)
+    async def test_email_account_is_deleted_with_correct_password(self, find_one, delete_one, cleanup):
+        find_one.return_value = {
+            "_id": "507f1f77bcf86cd799439011", "provider": "email", "role": "user",
+            "password_hash": password_hash.hash("correct-password"),
+        }
+        await delete_account(DeleteAccountRequest(password="correct-password"), response=Mock(), user_id="507f1f77bcf86cd799439011")
+        delete_one.assert_awaited_once_with({"_id": "507f1f77bcf86cd799439011"})
+        cleanup.assert_called_once()
+
+    @patch("Authentication.router.id_token.verify_oauth2_token")
+    @patch("Authentication.router.delete_user_workspace_data")
+    @patch("Authentication.router.users.delete_one", new_callable=AsyncMock)
+    @patch("Authentication.router.users.find_one", new_callable=AsyncMock)
+    async def test_google_account_requires_matching_credential(self, find_one, delete_one, cleanup, verify_token):
+        find_one.return_value = {
+            "_id": "507f1f77bcf86cd799439011", "provider": "google", "role": "user",
+            "email": "user@gmail.com", "google_sub": "sub-123",
+        }
+        verify_token.return_value = {"sub": "sub-999", "email": "user@gmail.com"}
+        with self.assertRaises(HTTPException) as raised:
+            await delete_account(DeleteAccountRequest(credential="token"), response=Mock(), user_id="507f1f77bcf86cd799439011")
+        self.assertEqual(raised.exception.status_code, 401)
+        delete_one.assert_not_awaited()
+        cleanup.assert_not_called()
+
+    @patch("Authentication.router.id_token.verify_oauth2_token")
+    @patch("Authentication.router.delete_user_workspace_data")
+    @patch("Authentication.router.users.delete_one", new_callable=AsyncMock)
+    @patch("Authentication.router.users.find_one", new_callable=AsyncMock)
+    async def test_google_account_is_deleted_with_matching_credential(self, find_one, delete_one, cleanup, verify_token):
+        find_one.return_value = {
+            "_id": "507f1f77bcf86cd799439011", "provider": "google", "role": "user",
+            "email": "user@gmail.com", "google_sub": "sub-123",
+        }
+        verify_token.return_value = {"sub": "sub-123", "email": "user@gmail.com"}
+        await delete_account(DeleteAccountRequest(credential="token"), response=Mock(), user_id="507f1f77bcf86cd799439011")
+        delete_one.assert_awaited_once_with({"_id": "507f1f77bcf86cd799439011"})
+        cleanup.assert_called_once()
+
+    @patch("Authentication.router.users.find_one", new_callable=AsyncMock)
+    async def test_demo_account_cannot_be_deleted(self, find_one):
+        find_one.return_value = {"_id": "507f1f77bcf86cd799439011", "provider": "email", "role": "demo"}
+        with self.assertRaises(HTTPException) as raised:
+            await delete_account(DeleteAccountRequest(password="anything"), response=Mock(), user_id="507f1f77bcf86cd799439011")
+        self.assertEqual(raised.exception.status_code, 403)
 
 
 if __name__ == "__main__":
