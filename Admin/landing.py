@@ -1,8 +1,14 @@
 from datetime import datetime, timezone
+import logging
+
+from pymongo.errors import PyMongoError
 
 from Authentication.database import landing_content, project_catalog
 
 from .models import LandingContent, ProjectCatalog
+
+
+logger = logging.getLogger("veera.landing")
 
 
 DEFAULT_PROJECT_CATALOG = {
@@ -144,7 +150,11 @@ DEFAULT_LANDING_CONTENT = {
 
 
 async def get_landing_content():
-    document = await landing_content.find_one({"_id": "default"})
+    try:
+        document = await landing_content.find_one({"_id": "default"})
+    except PyMongoError:
+        logger.exception("MongoDB unavailable; using built-in landing content")
+        document = None
     return LandingContent(**({**DEFAULT_LANDING_CONTENT, **document} if document else DEFAULT_LANDING_CONTENT))
 
 
@@ -156,18 +166,31 @@ async def save_landing_content(content: LandingContent, updated_by):
 
 
 async def get_project_catalog():
-    document = await project_catalog.find_one({"_id": "default"})
+    try:
+        document = await project_catalog.find_one({"_id": "default"})
+        if not document:
+            legacy = await landing_content.find_one({"_id": "default"}) or {}
+            if legacy.get("portfolio_projects"):
+                document = {
+                    "nav_label": legacy.get("portfolio_nav_label", DEFAULT_PROJECT_CATALOG["nav_label"]),
+                    "eyebrow": legacy.get("portfolio_eyebrow", DEFAULT_PROJECT_CATALOG["eyebrow"]),
+                    "title": legacy.get("portfolio_title", DEFAULT_PROJECT_CATALOG["title"]),
+                    "description": legacy.get("portfolio_description", DEFAULT_PROJECT_CATALOG["description"]),
+                    "projects": legacy["portfolio_projects"],
+                }
+    except PyMongoError:
+        logger.exception("MongoDB unavailable; using built-in project catalog")
+        document = None
+    content = ProjectCatalog(**(document or DEFAULT_PROJECT_CATALOG))
     if not document:
-        legacy = await landing_content.find_one({"_id": "default"}) or {}
-        if legacy.get("portfolio_projects"):
-            document = {
-                "nav_label": legacy.get("portfolio_nav_label", DEFAULT_PROJECT_CATALOG["nav_label"]),
-                "eyebrow": legacy.get("portfolio_eyebrow", DEFAULT_PROJECT_CATALOG["eyebrow"]),
-                "title": legacy.get("portfolio_title", DEFAULT_PROJECT_CATALOG["title"]),
-                "description": legacy.get("portfolio_description", DEFAULT_PROJECT_CATALOG["description"]),
-                "projects": legacy["portfolio_projects"],
-            }
-    return ProjectCatalog(**(document or DEFAULT_PROJECT_CATALOG))
+        project_type = type(content.projects[0])
+        existing_ids = {project.id for project in content.projects}
+        content.projects.extend(
+            project_type(**project) for project in (
+                BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT
+            ) if project["id"] not in existing_ids
+        )
+    return content
 
 
 async def migrate_project_catalog():

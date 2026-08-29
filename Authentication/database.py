@@ -3,7 +3,7 @@ from pymongo import AsyncMongoClient
 from .config import settings
 
 
-client = AsyncMongoClient(settings.mongodb_url)
+client = AsyncMongoClient(settings.mongodb_url, serverSelectionTimeoutMS=5_000)
 database = client[settings.mongodb_database]
 users = database.users
 landing_content = database.landing_content

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from pymongo.errors import ServerSelectionTimeoutError
 
 from Admin.landing import (
     DEFAULT_LANDING_CONTENT, DEFAULT_PROJECT_CATALOG, get_landing_content,
@@ -111,6 +112,19 @@ class LandingContentTests(unittest.IsolatedAsyncioTestCase):
         find_one.return_value = None
         content = await get_landing_content()
         self.assertEqual(content.brand_name, "Veera AI")
+
+    @patch("Admin.landing.landing_content.find_one", new_callable=AsyncMock)
+    async def test_public_landing_uses_defaults_when_mongodb_is_unavailable(self, find_one):
+        find_one.side_effect = ServerSelectionTimeoutError("unavailable")
+        content = await get_landing_content()
+        self.assertEqual(content.brand_name, "Veera AI")
+
+    @patch("Admin.landing.project_catalog.find_one", new_callable=AsyncMock)
+    async def test_project_catalog_uses_built_ins_when_mongodb_is_unavailable(self, find_one):
+        find_one.side_effect = ServerSelectionTimeoutError("unavailable")
+        content = await get_project_catalog()
+        project_ids = {project.id for project in content.projects}
+        self.assertTrue({"basic-chat", "basic-rag", "advanced-rag", "google-workspace-agent"} <= project_ids)
 
     @patch("Admin.landing.project_catalog.find_one", new_callable=AsyncMock)
     async def test_public_projects_hide_drafts_and_follow_display_order(self, find_one):
