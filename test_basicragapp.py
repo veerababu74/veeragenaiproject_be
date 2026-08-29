@@ -1,4 +1,5 @@
 import asyncio
+import os
 import unittest
 import tempfile
 from io import BytesIO
@@ -8,7 +9,7 @@ from unittest.mock import Mock, patch
 from docx import Document
 from fastapi import HTTPException
 
-from basicragapp import vector_store
+from basicragapp import bucket_storage, vector_store
 from basicragapp.chunking import fixed_chunks, recursive_chunks, semantic_chunks
 from basicragapp.documents import DocumentError, extract_text
 from basicragapp.database import DuplicateDocumentError, add_exchange, create_session, delete_session, find_document_by_hash, get_session, initialize, list_documents, save_document
@@ -18,6 +19,15 @@ from basicragapp.router import _http_error, _rollback_document, send_message
 
 
 class BasicRagFoundationTests(unittest.TestCase):
+    def test_vercel_uses_writable_hugging_face_cache(self):
+        with tempfile.TemporaryDirectory() as temporary_directory, patch.dict(
+            os.environ, {"VERCEL": "1"}
+        ), patch("basicragapp.bucket_storage.gettempdir", return_value=temporary_directory):
+            bucket_storage._configure_cache()
+            expected = Path(temporary_directory) / "veeragenai" / "huggingface"
+            self.assertEqual(os.environ["HF_HOME"], str(expected))
+            self.assertEqual(os.environ["HF_XET_CACHE"], str(expected / "xet"))
+
     @patch("basicragapp.embeddings.requests.post")
     def test_embedding_request_sets_pinecone_dimension(self, post):
         post.return_value.ok = True

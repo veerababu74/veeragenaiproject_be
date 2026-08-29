@@ -1,3 +1,18 @@
+import os
+from pathlib import Path
+from tempfile import gettempdir
+
+
+def _configure_cache() -> None:
+    if os.getenv("VERCEL"):
+        cache = Path(gettempdir()) / "veeragenai" / "huggingface"
+        cache.mkdir(parents=True, exist_ok=True)
+        os.environ["HF_HOME"] = str(cache)
+        os.environ["HF_XET_CACHE"] = str(cache / "xet")
+
+
+_configure_cache()
+
 from huggingface_hub import HfApi
 
 from Authentication.config import settings
