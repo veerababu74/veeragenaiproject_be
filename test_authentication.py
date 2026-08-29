@@ -1,6 +1,8 @@
 import unittest
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import AsyncMock, patch
 
 from pydantic import ValidationError
@@ -22,6 +24,14 @@ class AuthenticationValidationTests(unittest.TestCase):
     def test_admin_role_comes_from_email_allowlist(self):
         self.assertEqual(settings.role_for_email("VEERA99856@gmail.com"), "admin")
         self.assertEqual(settings.role_for_email("someone@gmail.com"), "user")
+
+    def test_vercel_uses_writable_temporary_sqlite_directory(self):
+        with TemporaryDirectory() as temporary_directory:
+            with patch.dict("os.environ", {"VERCEL": "1"}), patch(
+                "Authentication.config.gettempdir", return_value=temporary_directory
+            ):
+                database_path = settings.sqlite_path("project.db", Path("/var/data"))
+        self.assertEqual(database_path, Path(temporary_directory) / "veeragenai" / "project.db")
 
     def test_supported_and_unsupported_email_domains(self):
         request = RegisterRequest(email="user@gmail.com", password="password123")

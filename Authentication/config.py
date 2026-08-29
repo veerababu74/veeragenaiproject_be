@@ -1,5 +1,7 @@
 from functools import lru_cache
+import os
 from pathlib import Path
+from tempfile import gettempdir
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -50,7 +52,10 @@ class Settings(BaseSettings):
         return bool(self.demo_email and self.demo_password)
 
     def sqlite_path(self, filename: str, default_directory: Path):
-        directory = Path(self.data_dir) if self.data_dir else default_directory
+        if os.getenv("VERCEL"):
+            directory = Path(gettempdir()) / "veeragenai"
+        else:
+            directory = Path(self.data_dir) if self.data_dir else default_directory
         directory.mkdir(parents=True, exist_ok=True)
         return directory / filename
 
