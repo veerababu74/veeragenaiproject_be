@@ -11,7 +11,7 @@ services:
       - key: DATA_DIR
         value: /var/data
       - key: COOKIE_SECURE
-        value: true
+        value: "true"
       - key: COOKIE_SAMESITE
         value: none
       - key: MONGODB_URL
@@ -53,7 +53,7 @@ services:
       - key: SMTP_FROM
         sync: false
       - key: SMTP_USE_TLS
-        value: true
+        value: "true"
     disk:
       name: veera-ai-data
       mountPath: /var/data
