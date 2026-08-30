@@ -44,22 +44,34 @@ def decrypt_token(token, secret):
         raise GoogleConnectionError("Stored Google credentials could not be decrypted") from error
 
 
-def create_state(user_id, secret):
+def create_state(user_id, secret, return_url=None):
+    payload = {
+        "sub": user_id,
+        "purpose": "google-workspace-link",
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=10),
+    }
+    if return_url:
+        payload["return_url"] = return_url
     return jwt.encode(
-        {"sub": user_id, "purpose": "google-workspace-link", "exp": datetime.now(timezone.utc) + timedelta(minutes=10)},
+        payload,
         secret,
         algorithm="HS256",
     )
 
 
-def read_state(state, secret):
+def read_state_payload(state, secret):
     try:
         payload = jwt.decode(state, secret, algorithms=["HS256"])
         if payload.get("purpose") != "google-workspace-link":
             raise GoogleConnectionError("Invalid Google authorization state")
-        return payload["sub"]
+        payload["sub"]
+        return payload
     except (jwt.InvalidTokenError, KeyError) as error:
         raise GoogleConnectionError("Google authorization expired or is invalid") from error
+
+
+def read_state(state, secret):
+    return read_state_payload(state, secret)["sub"]
 
 
 def _flow(client_id, client_secret, redirect_uri, state=None):

@@ -20,6 +20,7 @@ from workspaceagent.oauth import (
     encrypt_token,
     exchange_code,
     read_state,
+    read_state_payload,
     refresh_access_token,
 )
 from workspaceagent.providers import _provider_error, tool_plan
@@ -34,11 +35,15 @@ class WorkspaceAgentSecurityTests(unittest.TestCase):
         self.assertEqual(decrypt_token(encrypted, "test-jwt-secret"), "refresh-secret")
 
     def test_oauth_state_is_user_bound_and_rejects_tampering(self):
-        state = create_state("user-1", "test-jwt-secret")
+        state = create_state("user-1", "test-jwt-secret", "https://veeragenai.netlify.app")
 
         self.assertEqual(read_state(state, "test-jwt-secret"), "user-1")
+        self.assertEqual(
+            read_state_payload(state, "test-jwt-secret")["return_url"],
+            "https://veeragenai.netlify.app",
+        )
         with self.assertRaises(GoogleConnectionError):
-            read_state(f"{state[:-1]}x", "test-jwt-secret")
+            read_state(f"x{state[1:]}", "test-jwt-secret")
 
     def test_authorization_avoids_unpersisted_pkce_and_historical_scopes(self):
         url = authorization_url("client-id", "client-secret", "http://localhost/callback", "state")

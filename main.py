@@ -155,7 +155,7 @@ async def log_request(request: Request, call_next):
 	return response
 
 
-allowed_origins = {settings.frontend_url}
+allowed_origins = settings.frontend_url_set
 if "localhost" in settings.frontend_url:
 	allowed_origins.add(settings.frontend_url.replace("localhost", "127.0.0.1"))
 app.add_middleware(

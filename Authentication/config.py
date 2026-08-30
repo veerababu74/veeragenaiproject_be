@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     jwt_secret: str
     admin_emails: str = ""
     frontend_url: str = "http://localhost:5173"
+    frontend_urls: str = ""
     google_client_id: str = ""
     google_client_secret: str = ""
     google_workspace_redirect_uri: str = "http://localhost:8000/workspace-agent/google/callback"
@@ -46,6 +47,14 @@ class Settings(BaseSettings):
     @property
     def admin_email_set(self):
         return {email.strip().lower() for email in self.admin_emails.split(",") if email.strip()}
+
+    @property
+    def frontend_url_set(self):
+        return {
+            url.strip().rstrip("/")
+            for url in f"{self.frontend_url},{self.frontend_urls}".split(",")
+            if url.strip()
+        }
 
     @property
     def demo_enabled(self):

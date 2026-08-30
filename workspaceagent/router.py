@@ -3,7 +3,7 @@ import logging
 from urllib.parse import quote
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 
 from Authentication.config import settings
@@ -17,7 +17,7 @@ from .google_tools import GoogleToolError, GoogleWorkspace
 from .models import AgentRequest, ConfirmRequest
 from .oauth import (
     GoogleConnectionError, authorization_url, create_state, decrypt_token, encrypt_token,
-    exchange_code, google_email, read_state, refresh_access_token, revoke,
+    exchange_code, google_email, read_state_payload, refresh_access_token, revoke,
 )
 
 
@@ -68,9 +68,15 @@ async def connection(user_id: str = Depends(agent_user_id)):
 
 
 @router.get("/google/authorize")
-async def google_authorize(user_id: str = Depends(agent_user_id)):
+async def google_authorize(
+    return_url: str | None = Query(default=None),
+    user_id: str = Depends(agent_user_id),
+):
     _require_oauth_config()
-    state = create_state(user_id, settings.jwt_secret)
+    return_url = (return_url or settings.frontend_url).rstrip("/")
+    if return_url not in settings.frontend_url_set:
+        raise HTTPException(status_code=400, detail="Unsupported frontend URL")
+    state = create_state(user_id, settings.jwt_secret, return_url)
     return {"authorization_url": authorization_url(
         settings.google_client_id, settings.google_client_secret,
         settings.google_workspace_redirect_uri, state,
@@ -79,12 +85,16 @@ async def google_authorize(user_id: str = Depends(agent_user_id)):
 
 @router.get("/google/callback")
 async def google_callback(code: str = "", state: str = "", error: str = ""):
-    destination = f"{settings.frontend_url}/projects/{PROJECT_ID}"
-    if error:
-        return RedirectResponse(f"{destination}?google_error={quote(error)}")
+    destination = f"{settings.frontend_url.rstrip('/')}/projects/{PROJECT_ID}"
     try:
+        state_payload = read_state_payload(state, settings.jwt_secret)
+        return_url = state_payload.get("return_url", settings.frontend_url).rstrip("/")
+        if return_url in settings.frontend_url_set:
+            destination = f"{return_url}/projects/{PROJECT_ID}"
+        if error:
+            return RedirectResponse(f"{destination}?google_error={quote(error)}")
         _require_oauth_config()
-        user_id = read_state(state, settings.jwt_secret)
+        user_id = state_payload["sub"]
         data = await asyncio.to_thread(exchange_code, code, settings.google_client_id, settings.google_client_secret, settings.google_workspace_redirect_uri)
         email = await asyncio.to_thread(google_email, data["access_token"])
         await users.update_one(

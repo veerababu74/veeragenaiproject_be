@@ -29,6 +29,14 @@ class AuthenticationValidationTests(unittest.TestCase):
         self.assertEqual(settings.role_for_email("VEERA99856@gmail.com"), "admin")
         self.assertEqual(settings.role_for_email("someone@gmail.com"), "user")
 
+    @patch.object(settings, "frontend_url", "https://veeragenaiproject-fe.vercel.app")
+    @patch.object(settings, "frontend_urls", "https://veeragenai.netlify.app")
+    def test_multiple_frontend_origins_are_supported(self):
+        self.assertEqual(settings.frontend_url_set, {
+            "https://veeragenaiproject-fe.vercel.app",
+            "https://veeragenai.netlify.app",
+        })
+
     def test_vercel_uses_writable_temporary_sqlite_directory(self):
         with TemporaryDirectory() as temporary_directory:
             with patch.dict("os.environ", {"VERCEL": "1"}), patch(
