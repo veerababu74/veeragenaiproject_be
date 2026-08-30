@@ -3,7 +3,7 @@ import json
 from google import genai
 from google.genai import types
 from groq import Groq
-from mistralai.client import Mistral
+from mistralai import Mistral
 from openai import OpenAI
 
 from basichatapp.providers import ProviderError

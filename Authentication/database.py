@@ -13,6 +13,7 @@ database = client[settings.mongodb_database]
 users = database.users
 landing_content = database.landing_content
 project_catalog = database.project_catalog
+blogs = database.blogs
 
 
 async def close_database():

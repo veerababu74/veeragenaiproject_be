@@ -17,6 +17,8 @@ from Authentication.router import router as authentication_router
 from Authentication.security import decode_access_token, password_hash
 from Admin.router import public_router as landing_router, router as admin_router
 from Admin.landing import ensure_advanced_rag_project, ensure_basic_rag_project, ensure_google_workspace_agent_project, migrate_project_catalog
+from Blog.router import public_router as blog_public_router, admin_router as blog_admin_router
+from Blog.project_guides import ensure_project_guides
 from advancedragapp import database as advanced_rag_database
 from advancedragapp.router import router as advanced_rag_router
 from basichatapp import database as basic_chat_database
@@ -37,6 +39,8 @@ logger = logging.getLogger("veera.api")
 async def initialize_mongodb():
 	logger.info("Connecting to MongoDB | running startup migrations")
 	await users.create_index("email", unique=True)
+	from Authentication.database import blogs
+	await blogs.create_index("slug", unique=True)
 	await users.update_many({"role": {"$exists": False}}, {"$set": {"role": "user"}})
 	await users.update_many({"is_active": {"$exists": False}}, {"$set": {"is_active": True}})
 	await users.update_many({"blocked_projects": {"$exists": False}}, {"$set": {"blocked_projects": []}})
@@ -69,6 +73,7 @@ async def initialize_mongodb():
 	await ensure_basic_rag_project()
 	await ensure_advanced_rag_project()
 	await ensure_google_workspace_agent_project()
+	await ensure_project_guides()
 	if settings.admin_email_set:
 		await users.update_many(
 			{"role": "admin", "email": {"$nin": list(settings.admin_email_set)}},
@@ -163,6 +168,8 @@ app.add_middleware(
 app.include_router(authentication_router)
 app.include_router(landing_router)
 app.include_router(admin_router)
+app.include_router(blog_public_router)
+app.include_router(blog_admin_router)
 app.include_router(basic_chat_router)
 app.include_router(basic_rag_router)
 app.include_router(advanced_rag_router)

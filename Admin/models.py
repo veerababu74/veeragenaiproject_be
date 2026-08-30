@@ -70,6 +70,7 @@ class LandingPortfolioProject(BaseModel):
     show_workspace: bool = True
     display_order: int = Field(default=0, ge=0, le=999)
     project_url: str = Field(min_length=1, max_length=500)
+    blog_slug: str | None = Field(default=None, max_length=100, description="Optional blog post slug linked to this project")
 
     @field_validator("category")
     @classmethod
