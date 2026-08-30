@@ -1,3 +1,6 @@
+import importlib
+import sys
+import types
 import unittest
 import weakref
 from unittest.mock import AsyncMock, Mock, patch
@@ -8,6 +11,7 @@ from oauthlib.oauth2 import InvalidClientError, InvalidGrantError
 
 from workspaceagent.agent import run_agent
 from workspaceagent.models import ConfirmRequest
+import workspaceagent.providers as providers
 from workspaceagent.oauth import (
     GoogleConnectionError,
     authorization_url,
@@ -98,6 +102,10 @@ class WorkspaceAgentSecurityTests(unittest.TestCase):
 
 
 class WorkspaceAgentPlanningTests(unittest.TestCase):
+    def test_provider_module_import_does_not_require_mistral_client(self):
+        with patch.dict(sys.modules, {"mistralai": types.ModuleType("mistralai")}):
+            importlib.reload(providers)
+
     def test_gemini_sdk_error_code_is_actionable(self):
         error = Exception("provider details")
         error.code = 404
@@ -187,7 +195,7 @@ class WorkspaceAgentPlanningTests(unittest.TestCase):
         self.assertEqual(plan, {"action": "calendar_list", "arguments": {"query": "planning"}})
         self.assertEqual(client.return_value.models.generate_content.call_args.kwargs["model"], "gemini-test")
 
-    @patch("workspaceagent.providers.Mistral")
+    @patch("workspaceagent.providers._mistral_client")
     @patch("workspaceagent.providers.Groq")
     def test_mistral_and_groq_native_tool_calls_are_normalized(self, groq, mistral):
         function = Mock(name="function")

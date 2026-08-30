@@ -3,7 +3,6 @@ import json
 from google import genai
 from google.genai import types
 from groq import Groq
-from mistralai import Mistral
 from openai import OpenAI
 
 from basichatapp.providers import ProviderError
@@ -92,6 +91,12 @@ def _openai_client(provider, api_key):
     return OpenAI(api_key=api_key)
 
 
+def _mistral_client(api_key):
+    from mistralai import Mistral
+
+    return Mistral(api_key=api_key)
+
+
 def _provider_error(provider, error):
     label = {"gemini": "Google Gemini", "groq": "GroqCloud", "openrouter": "OpenRouter"}.get(provider, provider.title())
     status_code = getattr(error, "status_code", None) or getattr(error, "code", None)
@@ -124,7 +129,7 @@ def tool_plan(provider, api_key, model, system, message, history=None):
         tools = [{"type": "function", "function": function} for function in FUNCTIONS]
         messages = _messages(system, message, history)
         if provider == "mistral":
-            response = Mistral(api_key=api_key).chat.complete(model=model, messages=messages, tools=tools, tool_choice="auto")
+            response = _mistral_client(api_key).chat.complete(model=model, messages=messages, tools=tools, tool_choice="auto")
         elif provider == "groq":
             response = Groq(api_key=api_key).chat.completions.create(model=model, messages=messages, tools=tools, tool_choice="auto")
         else:
@@ -152,7 +157,7 @@ def text_response(provider, api_key, model, messages):
             )
             return response.text or "Google returned no matching items."
         if provider == "mistral":
-            response = Mistral(api_key=api_key).chat.complete(model=model, messages=messages)
+            response = _mistral_client(api_key).chat.complete(model=model, messages=messages)
         elif provider == "groq":
             response = Groq(api_key=api_key).chat.completions.create(model=model, messages=messages)
         else:
