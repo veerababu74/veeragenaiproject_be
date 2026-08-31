@@ -5,7 +5,7 @@ from pymongo.errors import PyMongoError
 
 from Authentication.database import landing_content, project_catalog
 
-from .models import LandingContent, ProjectCatalog
+from .models import LandingContent, LandingPortfolioProject, ProjectCatalog
 
 
 logger = logging.getLogger("veera.landing")
@@ -227,10 +227,9 @@ async def get_project_catalog():
         logger.exception("MongoDB unavailable; using built-in project catalog")
         document = None
     content = ProjectCatalog(**(document or DEFAULT_PROJECT_CATALOG))
-    project_type = type(content.projects[0]) if content.projects else LandingPortfolioProject
     existing_ids = {project.id for project in content.projects}
     missing = [
-        project_type(**project)
+        LandingPortfolioProject(**project)
         for project in BUILT_IN_PROJECTS
         if project["id"] not in existing_ids
     ]
@@ -274,7 +273,7 @@ async def ensure_basic_rag_project():
     document = await project_catalog.find_one({"_id": "default"})
     if not document:
         content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.append(type(content.projects[0])(**BASIC_RAG_PROJECT))
+        content.projects.append(LandingPortfolioProject(**BASIC_RAG_PROJECT))
         await save_project_catalog(content, "built-in-project")
     elif not any(project.get("id") == BASIC_RAG_PROJECT["id"] for project in document.get("projects", [])):
         await project_catalog.update_one(
@@ -287,7 +286,7 @@ async def ensure_advanced_rag_project():
     document = await project_catalog.find_one({"_id": "default"})
     if not document:
         content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.extend(type(content.projects[0])(**project) for project in (BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT))
+        content.projects.extend(LandingPortfolioProject(**project) for project in (BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT))
         await save_project_catalog(content, "built-in-project")
     elif not any(project.get("id") == ADVANCED_RAG_PROJECT["id"] for project in document.get("projects", [])):
         await project_catalog.update_one(
@@ -300,7 +299,7 @@ async def ensure_google_workspace_agent_project():
     document = await project_catalog.find_one({"_id": "default"})
     if not document:
         content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.extend(type(content.projects[0])(**project) for project in (BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT))
+        content.projects.extend(LandingPortfolioProject(**project) for project in (BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT))
         await save_project_catalog(content, "built-in-project")
     elif not any(project.get("id") == GOOGLE_WORKSPACE_AGENT_PROJECT["id"] for project in document.get("projects", [])):
         await project_catalog.update_one(
@@ -313,7 +312,7 @@ async def ensure_graph_rag_project():
     document = await project_catalog.find_one({"_id": "default"})
     if not document:
         content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.extend(type(content.projects[0])(**project) for project in (
+        content.projects.extend(LandingPortfolioProject(**project) for project in (
             BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT
         ))
         await save_project_catalog(content, "built-in-project")
@@ -328,7 +327,7 @@ async def ensure_chunking_lab_project():
     document = await project_catalog.find_one({"_id": "default"})
     if not document:
         content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.extend(type(content.projects[0])(**project) for project in (
+        content.projects.extend(LandingPortfolioProject(**project) for project in (
             BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT, CHUNKING_LAB_PROJECT
         ))
         await save_project_catalog(content, "built-in-project")
