@@ -16,9 +16,9 @@ class BlogModelTests(unittest.TestCase):
 
         self.assertEqual(
             {post.project_id for post in posts},
-            {"basic-chat", "basic-rag", "advanced-rag", "google-workspace-agent"},
+            {"basic-chat", "basic-rag", "advanced-rag", "google-workspace-agent", "chunking-lab", "graph-rag"},
         )
-        self.assertEqual(len({post.slug for post in posts}), 4)
+        self.assertEqual(len({post.slug for post in posts}), len(PROJECT_GUIDES))
         self.assertTrue(all(post.published for post in posts))
         self.assertTrue(all(any(block.type == "mermaid" for block in post.blocks) for post in posts))
 

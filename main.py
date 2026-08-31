@@ -16,7 +16,7 @@ from Authentication.database import close_database, users
 from Authentication.router import router as authentication_router
 from Authentication.security import decode_access_token, password_hash
 from Admin.router import public_router as landing_router, router as admin_router
-from Admin.landing import ensure_advanced_rag_project, ensure_basic_rag_project, ensure_google_workspace_agent_project, migrate_project_catalog
+from Admin.landing import ensure_advanced_rag_project, ensure_basic_rag_project, ensure_google_workspace_agent_project, ensure_graph_rag_project, migrate_project_catalog
 from Blog.router import public_router as blog_public_router, admin_router as blog_admin_router
 from Blog.project_guides import ensure_project_guides
 from advancedragapp import database as advanced_rag_database
@@ -25,6 +25,8 @@ from basichatapp import database as basic_chat_database
 from basichatapp.router import router as basic_chat_router
 from basicragapp import database as basic_rag_database
 from basicragapp.router import router as basic_rag_router
+from graphragapp import database as graph_rag_database, graph_store
+from graphragapp.router import router as graph_rag_router
 from workspaceagent import database as workspace_agent_database
 from workspaceagent.router import router as workspace_agent_router
 
@@ -73,6 +75,7 @@ async def initialize_mongodb():
 	await ensure_basic_rag_project()
 	await ensure_advanced_rag_project()
 	await ensure_google_workspace_agent_project()
+	await ensure_graph_rag_project()
 	await ensure_project_guides()
 	if settings.admin_email_set:
 		await users.update_many(
@@ -98,6 +101,7 @@ async def lifespan(_: FastAPI):
 	basic_chat_database.cleanup_expired()
 	basic_rag_database.initialize()
 	advanced_rag_database.initialize()
+	graph_rag_database.initialize()
 	workspace_agent_database.initialize()
 	logger.info("SQLite startup complete")
 	if os.getenv("VERCEL"):
@@ -107,6 +111,7 @@ async def lifespan(_: FastAPI):
 	logger.info("API startup complete")
 	yield
 	logger.info("Shutting down API")
+	graph_store.close_driver()
 	await close_database()
 
 
@@ -173,6 +178,7 @@ app.include_router(blog_admin_router)
 app.include_router(basic_chat_router)
 app.include_router(basic_rag_router)
 app.include_router(advanced_rag_router)
+app.include_router(graph_rag_router)
 app.include_router(workspace_agent_router)
 
 

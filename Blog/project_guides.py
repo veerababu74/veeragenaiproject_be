@@ -335,6 +335,141 @@ PROJECT_GUIDES = [
             paragraph("The model proposes; the application decides. Read tools can run after validation, while write tools cross an explicit human approval boundary. That separation keeps natural-language interaction useful without granting an LLM silent authority over a user's calendar."),
         ],
     },
+	{
+		"slug": "chunking-strategies-visualizer",
+		"title": "Chunking Lab: Visualize Every Chunking Strategy Side by Side",
+		"description": "How 8 document chunking strategies work, why the choice matters for RAG, and how to use the interactive Chunking Lab visualizer.",
+		"tags": ["Chunking", "RAG", "LangChain", "Embeddings", "LLM", "NLP"],
+		"project_id": "chunking-lab",
+		"published": True,
+		"blocks": [
+			heading("Why chunking matters for RAG", 1),
+			paragraph("In a Retrieval-Augmented Generation pipeline, chunking turns a large document into small, searchable pieces. Get it wrong and your retriever returns irrelevant context. The Chunking Lab lets you upload any document and see all eight strategies produce different results in real time."),
+			diagram("""flowchart LR
+  U[Document upload] --> X[Text extraction]
+  X --> S{Selected strategies}
+  S --> F[Fixed size]
+  S --> R[Recursive character]
+  S --> M[Semantic or agentic]
+  M --> K[Gemini or LLM provider key]
+  F --> C[Chunks plus statistics]
+  R --> C
+  M --> C
+  C --> V[Side by side comparison]"""),
+			heading("The eight strategies"),
+			table(
+				["Strategy", "Engine", "API Key", "Best For"],
+				[
+					["Fixed Size", "Pure Python", "No", "Fast baseline; uniform chunk sizes"],
+					["Recursive Character", "LangChain", "No", "General-purpose RAG"],
+					["Sentence-Based", "Regex", "No", "Documents where sentence integrity matters"],
+					["Semantic", "Gemini Embeddings", "Embedding key", "Topic-sensitive splitting"],
+					["Markdown-Based", "LangChain", "No", "Docs, wikis, READMEs"],
+					["Document Structure", "Pure Python", "No", "PDFs/PPTX where paragraph units matter"],
+					["Agentic", "LLM", "LLM key", "Highest precision; atomic propositions"],
+					["Token-Based", "tiktoken", "No", "Precise context-window fitting"],
+				],
+			),
+			heading("How to use the Chunking Lab"),
+			steps(
+				"Open **Chunking Lab** from the Projects workspace.",
+				"Upload a document (PDF, DOCX, PPTX, TXT, Markdown, CSV, or Excel).",
+				"Select the strategies you want to compare.",
+				"For **Semantic** chunking enter a Gemini API key. For **Agentic** chunking choose a provider and API key.",
+				"Adjust Chunk Size and Overlap sliders.",
+				"Click **Analyze Document** and compare results across strategy tabs.",
+				"Use **Compare** view to see all strategies side by side.",
+			),
+			heading("Choosing the right strategy"),
+			bullets(
+				"**Default for most RAG**: Recursive Character with 800 chars / 120 overlap",
+				"**Highest retrieval precision**: Agentic (proposition-level chunks)",
+				"**Topic-coherent without LLM cost**: Semantic with Gemini embeddings",
+				"**Documentation/wikis**: Markdown-Based",
+				"**Precise context window fitting**: Token-Based",
+				"**Fastest possible processing**: Fixed Size",
+			),
+		],
+	},
+	{
+		"slug": "how-real-time-graph-rag-works",
+		"title": "Inside Real-time Graph RAG",
+		"description": "How documents become a Neo4j knowledge graph, why multi-hop traversal beats plain vector search, and the exact Cypher behind every step.",
+		"tags": ["Graph RAG", "Neo4j", "Cypher", "Knowledge Graph", "Embeddings"],
+		"project_id": "graph-rag",
+		"published": True,
+		"blocks": [
+			heading("Why a graph instead of a list of chunks", 1),
+			paragraph("Classic RAG ranks text chunks by similarity and hands the best ones to a model. That works when the answer sits inside one passage. It breaks down when the answer requires connecting facts that live in different passages. Graph RAG solves that by turning documents into entities and relationships, so the retriever can walk from one fact to a related fact instead of hoping a single chunk contains both."),
+			heading("What you actually see in this project"),
+			paragraph("Every internal step is streamed to the browser while it happens. You watch chunks being read, entities and relationships being extracted, embeddings being created, nodes being written to Neo4j, and the graph growing edge by edge. When you ask a question you see the vector search, the entry-point entities, the traversal, and the exact Cypher used at each stage."),
+			heading("How to use it"),
+			steps(
+				"Open **Graph RAG** from the Projects workspace and choose an LLM provider, model, and request-only API key.",
+				"Enter a Google Gemini embedding API key. It is used only for the current request.",
+				"Upload a PDF, DOCX, or TXT document up to 3 MB.",
+				"Watch the **Live build** panel as the knowledge graph is constructed in real time.",
+				"Ask a question and follow the retrieval trace from vector search to graph traversal to the final answer.",
+				"Open the **Cypher** tab to run read-only graph queries and inspect the data yourself.",
+			),
+			heading("Ingestion architecture"),
+			diagram("""flowchart TD
+  U[Document upload] --> X[Text extraction]
+  X --> C[Recursive chunking]
+  C --> L[LLM entity and relationship extraction]
+  L --> E[Gemini embeddings]
+  E --> N[(Neo4j Entity and Chunk nodes)]
+  L --> N
+  U --> H[(Hugging Face original file)]
+  C --> S[(SQLite session metadata)]
+  N --> R[Ready for graph retrieval]"""),
+			heading("The graph model"),
+			table(
+				["Element", "Shape", "Purpose"],
+				[
+					["Entity node", "(:Entity {key, name, type, description, embedding})", "A person, place, product, or concept"],
+					["Chunk node", "(:Chunk {id, text, filename, position, embedding})", "The source text a fact came from"],
+					["RELATES edge", "(:Entity)-[:RELATES {type}]->(:Entity)", "A typed fact such as WORKS_FOR or PART_OF"],
+					["MENTIONS edge", "(:Chunk)-[:MENTIONS]->(:Entity)", "Traces any node back to its evidence"],
+				],
+			),
+			heading("How a question is answered"),
+			diagram("""sequenceDiagram
+  participant UI as React UI
+  participant API as FastAPI
+  participant EMB as Gemini Embeddings
+  participant NEO as Neo4j
+  participant LLM as Selected LLM
+  UI->>API: Question plus session and request-only keys
+  API->>EMB: Embed the question
+  EMB-->>API: Query vector
+  API->>NEO: Cosine search over Chunk nodes
+  API->>NEO: Cosine search over Entity nodes
+  NEO-->>API: Entry-point entities
+  API->>NEO: Traverse RELATES edges one to three hops
+  NEO-->>API: Connected facts as triples
+  API->>LLM: Graph facts plus source chunks
+  LLM-->>API: Grounded answer
+  API-->>UI: Streamed steps, Cypher, answer, citations"""),
+			heading("The Cypher that does the work"),
+			paragraph("Retrieval uses a session-scoped cosine scan rather than a global vector index. Each session holds a small graph, so scanning is fast, and scoping every match to the session identifier guarantees one user can never read another user's graph."),
+			bullets(
+				"**Entry points**: `MATCH (e:Entity {session_id: $session_id})` then `vector.similarity.cosine(e.embedding, $vector)` ordered by score.",
+				"**Traversal**: `MATCH path = (seed)-[:RELATES*1..2]-(related)` starting from the matched entity keys.",
+				"**Evidence**: the `MENTIONS` edge links every entity back to the chunk that produced it.",
+				"**Cleanup**: `MATCH (n) WHERE n.session_id = $session_id DETACH DELETE n` removes a whole session graph.",
+			),
+			heading("Where graph retrieval wins and where it does not"),
+			paragraph("Multi-hop questions such as \"which people are connected to the same organisation\" are natural for a graph and awkward for vector search. The tradeoff is cost and fidelity: building the graph requires an LLM call per chunk, and the graph is only as good as that extraction. Entities can be missed or duplicated under slightly different names. The live view and the Cypher console exist so those imperfections are visible rather than hidden."),
+			heading("Privacy and retention"),
+			bullets(
+				"Provider and embedding API keys are used for the active request only and are never stored.",
+				"Original uploads go to a private per-user Hugging Face path and are removed with the document or session.",
+				"Session metadata and chat history live in a project-scoped SQLite database and expire after 24 hours of inactivity.",
+				"Deleting a session runs a detach-delete over its Neo4j nodes, leaving no graph behind.",
+			),
+		],
+	},
 ]
 
 

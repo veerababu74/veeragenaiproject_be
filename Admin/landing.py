@@ -78,6 +78,17 @@ GOOGLE_WORKSPACE_AGENT_PROJECT = {
 }
 
 
+GRAPH_RAG_PROJECT = {
+    "id": "graph-rag", "title": "Real-time Graph RAG",
+    "summary": "Watch a knowledge graph build itself in Neo4j, then answer questions by walking entity relationships instead of ranking text alone.",
+    "category": "Generative AI", "tags": ["Graph RAG", "Neo4j", "Cypher", "Knowledge Graph"],
+    "image_url": "https://images.unsplash.com/photo-1545987796-200677ee1011?auto=format&fit=crop&w=1400&q=85",
+    "image_alt": "Connected network nodes representing a knowledge graph", "status": "available",
+    "featured": False, "show_public": True, "show_workspace": True, "display_order": 5,
+    "project_url": "#signin",
+}
+
+
 DEFAULT_LANDING_CONTENT = {
     "brand_name": "Veera AI",
     "announcement": "Engineering intelligence for the physical world",
@@ -187,7 +198,7 @@ async def get_project_catalog():
         existing_ids = {project.id for project in content.projects}
         content.projects.extend(
             project_type(**project) for project in (
-                BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT
+                BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT
             ) if project["id"] not in existing_ids
         )
     return content
@@ -245,6 +256,21 @@ async def ensure_google_workspace_agent_project():
         await project_catalog.update_one(
             {"_id": "default"},
             {"$push": {"projects": GOOGLE_WORKSPACE_AGENT_PROJECT}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+        )
+
+
+async def ensure_graph_rag_project():
+    document = await project_catalog.find_one({"_id": "default"})
+    if not document:
+        content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
+        content.projects.extend(type(content.projects[0])(**project) for project in (
+            BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT
+        ))
+        await save_project_catalog(content, "built-in-project")
+    elif not any(project.get("id") == GRAPH_RAG_PROJECT["id"] for project in document.get("projects", [])):
+        await project_catalog.update_one(
+            {"_id": "default"},
+            {"$push": {"projects": GRAPH_RAG_PROJECT}, "$set": {"updated_at": datetime.now(timezone.utc)}},
         )
 
 

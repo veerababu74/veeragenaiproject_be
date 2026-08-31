@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     huggingface_bucket: str = "veera20/veeragenaiproject"
     pinecone_api_key: str = ""
     pinecone_index: str = "veeragenai-basic-rag"
+    neo4j_uri: str = ""
+    neo4j_username: str = "neo4j"
+    neo4j_password: str = ""
+    neo4j_database: str = "neo4j"
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""
