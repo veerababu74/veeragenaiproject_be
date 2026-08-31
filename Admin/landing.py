@@ -25,6 +25,7 @@ DEFAULT_PROJECT_CATALOG = {
             "image_alt": "Abstract artificial intelligence interface", "status": "available",
             "featured": True, "show_public": True, "show_workspace": True, "display_order": 1,
             "project_url": "#signin",
+            "blog_slug": "how-multi-provider-basic-chat-works",
         },
         {
             "id": "vision-lab", "title": "Machine Vision Lab",
@@ -55,6 +56,7 @@ BASIC_RAG_PROJECT = {
     "image_alt": "Open documents and a laptop on a workspace", "status": "available",
     "featured": False, "show_public": True, "show_workspace": True, "display_order": 2,
     "project_url": "#signin",
+    "blog_slug": "how-document-grounded-basic-rag-works",
 }
 
 ADVANCED_RAG_PROJECT = {
@@ -65,6 +67,7 @@ ADVANCED_RAG_PROJECT = {
     "image_alt": "Connected server infrastructure representing a retrieval pipeline", "status": "available",
     "featured": False, "show_public": True, "show_workspace": True, "display_order": 3,
     "project_url": "#signin",
+    "blog_slug": "how-transparent-advanced-rag-works",
 }
 
 GOOGLE_WORKSPACE_AGENT_PROJECT = {
@@ -75,6 +78,7 @@ GOOGLE_WORKSPACE_AGENT_PROJECT = {
     "image_alt": "Connected productivity dashboard representing email and calendar automation", "status": "available",
     "featured": False, "show_public": True, "show_workspace": True, "display_order": 4,
     "project_url": "#signin",
+    "blog_slug": "how-google-workspace-agent-works",
 }
 
 
@@ -86,6 +90,7 @@ GRAPH_RAG_PROJECT = {
     "image_alt": "Connected network nodes representing a knowledge graph", "status": "available",
     "featured": False, "show_public": True, "show_workspace": True, "display_order": 5,
     "project_url": "#signin",
+    "blog_slug": "how-real-time-graph-rag-works",
 }
 
 CHUNKING_LAB_PROJECT = {
@@ -187,6 +192,24 @@ async def save_landing_content(content: LandingContent, updated_by):
     return content
 
 
+BUILT_IN_PROJECTS = (
+    BASIC_RAG_PROJECT,
+    ADVANCED_RAG_PROJECT,
+    GOOGLE_WORKSPACE_AGENT_PROJECT,
+    GRAPH_RAG_PROJECT,
+    CHUNKING_LAB_PROJECT,
+)
+
+PROJECT_DEFAULT_BLOGS = {
+    "basic-chat": "how-multi-provider-basic-chat-works",
+    "basic-rag": "how-document-grounded-basic-rag-works",
+    "advanced-rag": "how-transparent-advanced-rag-works",
+    "google-workspace-agent": "how-google-workspace-agent-works",
+    "chunking-lab": "chunking-strategies-visualizer",
+    "graph-rag": "how-real-time-graph-rag-works",
+}
+
+
 async def get_project_catalog():
     try:
         document = await project_catalog.find_one({"_id": "default"})
@@ -204,14 +227,30 @@ async def get_project_catalog():
         logger.exception("MongoDB unavailable; using built-in project catalog")
         document = None
     content = ProjectCatalog(**(document or DEFAULT_PROJECT_CATALOG))
-    if not document:
-        project_type = type(content.projects[0])
-        existing_ids = {project.id for project in content.projects}
-        content.projects.extend(
-            project_type(**project) for project in (
-                BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT, CHUNKING_LAB_PROJECT
-            ) if project["id"] not in existing_ids
-        )
+    project_type = type(content.projects[0]) if content.projects else LandingPortfolioProject
+    existing_ids = {project.id for project in content.projects}
+    missing = [
+        project_type(**project)
+        for project in BUILT_IN_PROJECTS
+        if project["id"] not in existing_ids
+    ]
+    if missing:
+        content.projects.extend(missing)
+        try:
+            await project_catalog.update_one(
+                {"_id": "default"},
+                {
+                    "$push": {"projects": {"$each": [p.model_dump() for p in missing]}},
+                    "$set": {"updated_at": datetime.now(timezone.utc)},
+                },
+            )
+        except Exception:
+            pass
+
+    for project in content.projects:
+        if not project.blog_slug and project.id in PROJECT_DEFAULT_BLOGS:
+            project.blog_slug = PROJECT_DEFAULT_BLOGS[project.id]
+
     return content
 
 
