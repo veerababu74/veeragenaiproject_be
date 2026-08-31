@@ -88,6 +88,17 @@ GRAPH_RAG_PROJECT = {
     "project_url": "#signin",
 }
 
+CHUNKING_LAB_PROJECT = {
+    "id": "chunking-lab", "title": "Chunking Strategy Lab",
+    "summary": "Upload documents and visually compare 8 chunking strategies side by side with real-time statistics and chunk inspection.",
+    "category": "Generative AI", "tags": ["Chunking", "LangChain", "Embeddings", "LLM", "NLP"],
+    "image_url": "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=1400&q=85",
+    "image_alt": "Code and data visualizer interface for document chunking", "status": "available",
+    "featured": False, "show_public": True, "show_workspace": True, "display_order": 6,
+    "project_url": "#signin",
+    "blog_slug": "chunking-strategies-visualizer",
+}
+
 
 DEFAULT_LANDING_CONTENT = {
     "brand_name": "Veera AI",
@@ -198,7 +209,7 @@ async def get_project_catalog():
         existing_ids = {project.id for project in content.projects}
         content.projects.extend(
             project_type(**project) for project in (
-                BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT
+                BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT, CHUNKING_LAB_PROJECT
             ) if project["id"] not in existing_ids
         )
     return content
@@ -271,6 +282,21 @@ async def ensure_graph_rag_project():
         await project_catalog.update_one(
             {"_id": "default"},
             {"$push": {"projects": GRAPH_RAG_PROJECT}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+        )
+
+
+async def ensure_chunking_lab_project():
+    document = await project_catalog.find_one({"_id": "default"})
+    if not document:
+        content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
+        content.projects.extend(type(content.projects[0])(**project) for project in (
+            BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT, CHUNKING_LAB_PROJECT
+        ))
+        await save_project_catalog(content, "built-in-project")
+    elif not any(project.get("id") == CHUNKING_LAB_PROJECT["id"] for project in document.get("projects", [])):
+        await project_catalog.update_one(
+            {"_id": "default"},
+            {"$push": {"projects": CHUNKING_LAB_PROJECT}, "$set": {"updated_at": datetime.now(timezone.utc)}},
         )
 
 
