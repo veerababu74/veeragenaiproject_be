@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 import logging
 import os
@@ -27,6 +29,7 @@ from basicragapp import database as basic_rag_database
 from basicragapp.router import router as basic_rag_router
 from graphragapp import database as graph_rag_database, graph_store
 from graphragapp.router import router as graph_rag_router
+import retention
 from workspaceagent import database as workspace_agent_database
 from workspaceagent.router import router as workspace_agent_router
 
@@ -109,9 +112,13 @@ async def lifespan(_: FastAPI):
 		logger.info("Skipping MongoDB migrations during Vercel cold start")
 	else:
 		await initialize_mongodb()
-	logger.info("API startup complete")
+	retention_task = asyncio.create_task(retention.run_forever())
+	logger.info("API startup complete | retention sweep every %ss", retention.RUN_INTERVAL_SECONDS)
 	yield
 	logger.info("Shutting down API")
+	retention_task.cancel()
+	with contextlib.suppress(asyncio.CancelledError):
+		await retention_task
 	graph_store.close_driver()
 	await close_database()
 

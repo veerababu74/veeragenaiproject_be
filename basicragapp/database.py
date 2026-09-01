@@ -90,6 +90,26 @@ def cleanup_expired(database_path=DATABASE_PATH, now=None):
         connection.execute("DELETE FROM sessions WHERE updated_at <= ?", (cutoff,))
 
 
+def list_expiring_sessions(cutoff, database_path=DATABASE_PATH):
+    """Sessions that cleanup_expired(now=cutoff + RETENTION_SECONDS) is about to delete."""
+    with connect(database_path) as connection:
+        rows = connection.execute("SELECT id, user_id FROM sessions WHERE updated_at <= ?", (cutoff,)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_documents_expiring(cutoff, database_path=DATABASE_PATH):
+    """Documents whose session is about to expire — used to purge their Pinecone vectors
+    and bucket file *before* cleanup_expired() removes the SQLite row that records where
+    that data lives."""
+    with connect(database_path) as connection:
+        rows = connection.execute(
+            "SELECT d.id, d.user_id, d.chunk_count, d.remote_path FROM documents d "
+            "JOIN sessions s ON s.id = d.session_id WHERE s.updated_at <= ?",
+            (cutoff,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def create_session(user_id, provider, model, embedding_model, database_path=DATABASE_PATH):
     cleanup_expired(database_path)
     now = int(time.time())

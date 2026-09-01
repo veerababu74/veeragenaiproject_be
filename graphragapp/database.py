@@ -46,6 +46,18 @@ def list_all_documents(user_id):
     return base.list_all_documents(user_id, DATABASE_PATH)
 
 
+def cleanup_expired(now=None):
+    return base.cleanup_expired(DATABASE_PATH, now)
+
+
+def list_expiring_sessions(cutoff):
+    return base.list_expiring_sessions(cutoff, DATABASE_PATH)
+
+
+def list_documents_expiring(cutoff):
+    return base.list_documents_expiring(cutoff, DATABASE_PATH)
+
+
 def delete_all_sessions(user_id):
     return base.delete_all_sessions(user_id, DATABASE_PATH)
 

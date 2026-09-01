@@ -9,6 +9,7 @@ from Authentication.config import settings
 
 
 DATABASE_PATH = settings.sqlite_path("workspace_agent.db", Path(__file__).resolve().parent)
+RETENTION_SECONDS = 24 * 60 * 60
 
 
 @contextmanager
@@ -46,7 +47,20 @@ def initialize():
         """)
 
 
+def cleanup_expired(now=None):
+    cutoff = (now or int(time.time())) - RETENTION_SECONDS
+    with connect() as connection:
+        connection.execute("DELETE FROM sessions WHERE updated_at <= ?", (cutoff,))
+
+
+def list_expiring_sessions(cutoff):
+    with connect() as connection:
+        rows = connection.execute("SELECT id, user_id FROM sessions WHERE updated_at <= ?", (cutoff,)).fetchall()
+    return [dict(row) for row in rows]
+
+
 def create_session(user_id, provider, model, title="New workspace chat"):
+    cleanup_expired()
     now = int(time.time())
     item = {"id": uuid4().hex, "user_id": user_id, "title": title, "provider": provider, "model": model, "created_at": now, "updated_at": now}
     with connect() as connection:
@@ -55,12 +69,14 @@ def create_session(user_id, provider, model, title="New workspace chat"):
 
 
 def get_session(session_id, user_id):
+    cleanup_expired()
     with connect() as connection:
         row = connection.execute("SELECT * FROM sessions WHERE id=? AND user_id=?", (session_id, user_id)).fetchone()
     return dict(row) if row else None
 
 
 def list_sessions(user_id):
+    cleanup_expired()
     with connect() as connection:
         rows = connection.execute("SELECT * FROM sessions WHERE user_id=? ORDER BY updated_at DESC, rowid DESC", (user_id,)).fetchall()
     return [dict(row) for row in rows]
