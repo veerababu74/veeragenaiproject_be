@@ -107,7 +107,7 @@ def ingest_document(session_id, user_id, document_id, filename, text, provider, 
             "edges": all_edges,
         }
 
-    stats, stats_cypher = graph_store.graph_stats(session_id)
+    stats, stats_cypher = graph_store.graph_stats(session_id, user_id)
     yield {
         "step": "graph-complete",
         "message": "Knowledge graph updated",
@@ -119,7 +119,7 @@ def ingest_document(session_id, user_id, document_id, filename, text, provider, 
     }
 
 
-def answer_question(session_id, question, provider, api_key, model,
+def answer_question(session_id, user_id, question, provider, api_key, model,
                     embedding_api_key, embedding_model, top_k, hops, history):
     """Yield progress events while answering one question from the graph."""
     trace = {"question": question, "steps": []}
@@ -127,7 +127,7 @@ def answer_question(session_id, question, provider, api_key, model,
     query_vector = embed_texts(embedding_api_key, embedding_model, [question], "RETRIEVAL_QUERY")[0]
     yield {"step": "embed-question", "message": "Embedded the question", "dimensions": len(query_vector)}
 
-    chunk_rows, chunk_cypher = graph_store.search_chunks(session_id, query_vector, top_k)
+    chunk_rows, chunk_cypher = graph_store.search_chunks(session_id, user_id, query_vector, top_k)
     trace["steps"].append({"name": "Vector search over chunks", "cypher": chunk_cypher.strip(), "rows": chunk_rows})
     yield {
         "step": "chunk-search",
@@ -136,7 +136,7 @@ def answer_question(session_id, question, provider, api_key, model,
         "rows": chunk_rows,
     }
 
-    entity_rows, entity_cypher = graph_store.search_entities(session_id, query_vector, top_k)
+    entity_rows, entity_cypher = graph_store.search_entities(session_id, user_id, query_vector, top_k)
     trace["steps"].append({"name": "Vector search over entities", "cypher": entity_cypher.strip(), "rows": entity_rows})
     yield {
         "step": "entity-search",
@@ -146,7 +146,7 @@ def answer_question(session_id, question, provider, api_key, model,
     }
 
     keys = [row["key"] for row in entity_rows]
-    triples, expand_cypher = graph_store.expand_neighbourhood(session_id, keys, hops) if keys else ([], "")
+    triples, expand_cypher = graph_store.expand_neighbourhood(session_id, user_id, keys, hops) if keys else ([], "")
     trace["steps"].append({"name": f"Graph traversal ({hops} hops)", "cypher": expand_cypher.strip(), "rows": triples})
     yield {
         "step": "traversal",

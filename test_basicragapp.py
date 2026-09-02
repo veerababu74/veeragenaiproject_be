@@ -103,7 +103,7 @@ class BasicRagOwnershipTests(unittest.TestCase):
         session = create_session("user-1", "gemini", "gemini-test", "gemini-embedding-001", self.database_path)
         delete_session(session["id"], "user-1", self.database_path)
 
-        self.assertFalse(add_exchange(session["id"], "question", "answer", [], self.database_path))
+        self.assertFalse(add_exchange(session["id"], "user-1", "question", "answer", [], self.database_path))
 
     def test_user_has_five_mb_document_allowance(self):
         session = create_session("user-1", "gemini", "gemini-test", "gemini-embedding-001", self.database_path)
@@ -119,7 +119,7 @@ class BasicRagOwnershipTests(unittest.TestCase):
         with patch("basicragapp.database.time.time", return_value=100):
             session = create_session("user-1", "gemini", "gemini-test", "gemini-embedding-001", self.database_path)
         with patch("basicragapp.database.time.time", return_value=1000):
-            add_exchange(session["id"], "question", "answer", [], self.database_path)
+            add_exchange(session["id"], "user-1", "question", "answer", [], self.database_path)
         with patch("basicragapp.database.time.time", return_value=1000 + RETENTION_SECONDS - 1):
             self.assertIsNotNone(get_session(session["id"], "user-1", self.database_path))
         with patch("basicragapp.database.time.time", return_value=1000 + RETENTION_SECONDS):

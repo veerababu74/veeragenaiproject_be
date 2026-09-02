@@ -94,12 +94,12 @@ def get_messages(session_id, user_id):
     } for row in rows]
 
 
-def add_exchange(session_id, question, result):
+def add_exchange(session_id, user_id, question, result):
     now = int(time.time())
     pending = result.get("pending_action")
     with connect() as connection:
         connection.execute("BEGIN IMMEDIATE")
-        session = connection.execute("SELECT title FROM sessions WHERE id=?", (session_id,)).fetchone()
+        session = connection.execute("SELECT title FROM sessions WHERE id=? AND user_id=?", (session_id, user_id)).fetchone()
         if not session:
             return False
         connection.execute("INSERT INTO messages(session_id,role,content,created_at) VALUES (?,?,?,?)", (session_id, "user", question, now))
@@ -127,9 +127,12 @@ def claim_action(message_id, user_id):
     return {"session_id": row["session_id"], "action": json.loads(row["pending_action"])}
 
 
-def finish_action(message_id, content, data):
+def finish_action(message_id, user_id, content, data):
     with connect() as connection:
-        row = connection.execute("SELECT session_id FROM messages WHERE id=?", (message_id,)).fetchone()
+        row = connection.execute(
+            "SELECT m.session_id FROM messages m JOIN sessions s ON s.id=m.session_id WHERE m.id=? AND s.user_id=?",
+            (message_id, user_id),
+        ).fetchone()
         if not row:
             return
         connection.execute("UPDATE messages SET pending_status='completed' WHERE id=?", (message_id,))
@@ -139,9 +142,13 @@ def finish_action(message_id, content, data):
         )
 
 
-def release_action(message_id):
+def release_action(message_id, user_id):
     with connect() as connection:
-        connection.execute("UPDATE messages SET pending_status='pending' WHERE id=? AND pending_status='executing'", (message_id,))
+        connection.execute(
+            "UPDATE messages SET pending_status='pending' WHERE id=? AND pending_status='executing' "
+            "AND session_id IN (SELECT id FROM sessions WHERE user_id=?)",
+            (message_id, user_id),
+        )
 
 
 def delete_session(session_id, user_id):

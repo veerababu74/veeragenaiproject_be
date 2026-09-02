@@ -26,7 +26,7 @@ def _purge_rag_documents(database_module, user_id):
 def _purge_graph_rag(user_id):
     for session in graph_rag_database.list_sessions(user_id):
         try:
-            graph_store.delete_session_graph(session["id"])
+            graph_store.delete_session_graph(session["id"], user_id)
         except graph_store.GraphStoreError:
             logger.warning("Could not remove the Neo4j graph for session %s during account deletion", session["id"])
     for document in graph_rag_database.list_all_documents(user_id):

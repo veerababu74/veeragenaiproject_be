@@ -51,7 +51,7 @@ def _purge_graph_rag(cutoff):
     """Remove the Neo4j graph for every session about to expire, then its bucket files."""
     for session in graph_rag_database.list_expiring_sessions(cutoff):
         try:
-            graph_store.delete_session_graph(session["id"])
+            graph_store.delete_session_graph(session["id"], session["user_id"])
         except graph_store.GraphStoreError:
             logger.warning("Retention: could not remove Neo4j graph for session %s", session["id"])
     for document in graph_rag_database.list_documents_expiring(cutoff):

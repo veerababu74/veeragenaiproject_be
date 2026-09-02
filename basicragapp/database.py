@@ -238,12 +238,12 @@ def get_messages(session_id, user_id, database_path=DATABASE_PATH):
     return [{**dict(row), "sources": json.loads(row["sources"]), "trace": json.loads(row["trace"]) if row["trace"] else None} for row in rows]
 
 
-def add_exchange(session_id, question, answer, sources, database_path=DATABASE_PATH, trace=None):
+def add_exchange(session_id, user_id, question, answer, sources, database_path=DATABASE_PATH, trace=None):
     now = int(time.time())
     with connect(database_path) as connection:
         connection.execute("BEGIN IMMEDIATE")
         connection.execute("DELETE FROM sessions WHERE updated_at <= ?", (now - RETENTION_SECONDS,))
-        if not connection.execute("SELECT 1 FROM sessions WHERE id=?", (session_id,)).fetchone():
+        if not connection.execute("SELECT 1 FROM sessions WHERE id=? AND user_id=?", (session_id, user_id)).fetchone():
             return False
         connection.executemany(
             "INSERT INTO messages(session_id,role,content,sources,trace,created_at) VALUES (?,?,?,?,?,?)",

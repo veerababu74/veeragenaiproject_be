@@ -83,10 +83,10 @@ async def send_message(data: ChatRequest, user_id: str = Depends(chat_user_id)):
         )
     elif not history:
         document["title"] = await asyncio.to_thread(
-            database.update_session_title, document["id"], data.message
+            database.update_session_title, document["id"], user_id, data.message
         )
     document["expires_at"] = await asyncio.to_thread(
-        database.add_exchange, document["id"], data.message.strip(), answer
+        database.add_exchange, document["id"], user_id, data.message.strip(), answer
     )
     messages = await asyncio.to_thread(database.get_messages, document["id"])
     return ChatResponse(

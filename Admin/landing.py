@@ -104,6 +104,16 @@ CHUNKING_LAB_PROJECT = {
     "blog_slug": "chunking-strategies-visualizer",
 }
 
+AGENT_ORCHESTRATION_PROJECT = {
+    "id": "agent-orchestration", "title": "Agent Orchestrator",
+    "summary": "Design a graph of collaborating AI agents, wire up tools and RAG documents, and chat with any agent to watch it execute.",
+    "category": "Generative AI", "tags": ["Agents", "LangGraph", "LangChain", "Tools", "RAG"],
+    "image_url": "https://images.unsplash.com/photo-1591453089816-0fbb971b454c?auto=format&fit=crop&w=1400&q=85",
+    "image_alt": "Connected nodes representing a multi-agent orchestration graph", "status": "available",
+    "featured": False, "show_public": True, "show_workspace": True, "display_order": 7,
+    "project_url": "#signin",
+}
+
 
 DEFAULT_LANDING_CONTENT = {
     "brand_name": "Veera AI",
@@ -198,6 +208,7 @@ BUILT_IN_PROJECTS = (
     GOOGLE_WORKSPACE_AGENT_PROJECT,
     GRAPH_RAG_PROJECT,
     CHUNKING_LAB_PROJECT,
+    AGENT_ORCHESTRATION_PROJECT,
 )
 
 PROJECT_DEFAULT_BLOGS = {
@@ -307,6 +318,10 @@ async def ensure_graph_rag_project():
 
 async def ensure_chunking_lab_project():
     await _ensure_built_in_project(CHUNKING_LAB_PROJECT)
+
+
+async def ensure_agent_orchestration_project():
+    await _ensure_built_in_project(AGENT_ORCHESTRATION_PROJECT)
 
 
 async def save_project_catalog(content: ProjectCatalog, updated_by):

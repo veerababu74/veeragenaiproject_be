@@ -77,8 +77,8 @@ def get_messages(session_id, user_id):
     return base.get_messages(session_id, user_id, DATABASE_PATH)
 
 
-def add_exchange(session_id, question, answer, sources, trace):
-    return base.add_exchange(session_id, question, answer, sources, DATABASE_PATH, trace)
+def add_exchange(session_id, user_id, question, answer, sources, trace):
+    return base.add_exchange(session_id, user_id, question, answer, sources, DATABASE_PATH, trace)
 
 
 def delete_session(session_id, user_id):

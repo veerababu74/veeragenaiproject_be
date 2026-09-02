@@ -163,7 +163,7 @@ async def send_message(data: AgentRequest, user_id: str = Depends(agent_user_id)
     except (ProviderError, GoogleToolError, ValueError) as error:
         logger.warning("Workspace agent request failed | %s", error)
         raise HTTPException(status_code=502, detail=str(error)) from error
-    message_id = await asyncio.to_thread(database.add_exchange, item["id"], data.message.strip(), result)
+    message_id = await asyncio.to_thread(database.add_exchange, item["id"], user_id, data.message.strip(), result)
     if not message_id:
         raise HTTPException(status_code=409, detail="This agent session was deleted while the request was running")
     return await asyncio.to_thread(_payload, item, user_id)
@@ -177,12 +177,12 @@ async def confirm_action(data: ConfirmRequest, user_id: str = Depends(agent_user
     try:
         workspace = await _workspace(user_id)
         content, result = await asyncio.to_thread(execute_confirmed, claim["action"], workspace)
-        await asyncio.to_thread(database.finish_action, data.message_id, content, result)
+        await asyncio.to_thread(database.finish_action, data.message_id, user_id, content, result)
     except HTTPException:
-        await asyncio.to_thread(database.release_action, data.message_id)
+        await asyncio.to_thread(database.release_action, data.message_id, user_id)
         raise
     except (GoogleToolError, GoogleConnectionError, ValueError) as error:
-        await asyncio.to_thread(database.release_action, data.message_id)
+        await asyncio.to_thread(database.release_action, data.message_id, user_id)
         raise HTTPException(status_code=502, detail=str(error)) from error
     session_item = await asyncio.to_thread(database.get_session, claim["session_id"], user_id)
     return await asyncio.to_thread(_payload, session_item, user_id)

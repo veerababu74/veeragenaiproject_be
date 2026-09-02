@@ -58,7 +58,7 @@ MERGE (c)-[:MENTIONS]->(e)
 """
 
 SEARCH_CHUNKS = """
-MATCH (c:Chunk {session_id: $session_id})
+MATCH (c:Chunk {session_id: $session_id, user_id: $user_id})
 WITH c, vector.similarity.cosine(c.embedding, $vector) AS score
 WHERE score IS NOT NULL
 RETURN c.id AS id, c.text AS text, c.filename AS filename,
@@ -68,7 +68,7 @@ LIMIT $top_k
 """
 
 SEARCH_ENTITIES = """
-MATCH (e:Entity {session_id: $session_id})
+MATCH (e:Entity {session_id: $session_id, user_id: $user_id})
 WITH e, vector.similarity.cosine(e.embedding, $vector) AS score
 WHERE score IS NOT NULL
 RETURN e.key AS key, e.name AS name, e.type AS type, e.description AS description, score
@@ -78,7 +78,7 @@ LIMIT $top_k
 
 EXPAND_NEIGHBOURHOOD = """
 MATCH path = (seed:Entity)-[:RELATES*1..%(hops)d]-(related:Entity)
-WHERE seed.key IN $keys AND related.session_id = $session_id
+WHERE seed.key IN $keys AND related.session_id = $session_id AND related.user_id = $user_id
 UNWIND relationships(path) AS rel
 WITH DISTINCT startNode(rel) AS source, rel, endNode(rel) AS target
 RETURN source.name AS source, source.type AS source_type, rel.type AS relationship,
@@ -88,33 +88,33 @@ LIMIT $limit
 """
 
 SESSION_GRAPH = """
-MATCH (e:Entity {session_id: $session_id})
-OPTIONAL MATCH (e)-[r:RELATES]->(m:Entity {session_id: $session_id})
+MATCH (e:Entity {session_id: $session_id, user_id: $user_id})
+OPTIONAL MATCH (e)-[r:RELATES]->(m:Entity {session_id: $session_id, user_id: $user_id})
 RETURN collect(DISTINCT {key: e.key, name: e.name, type: e.type, description: e.description}) AS nodes,
        collect(DISTINCT CASE WHEN r IS NULL THEN NULL ELSE
            {source: e.key, target: m.key, type: r.type, description: coalesce(r.description, '')} END) AS edges
 """
 
 GRAPH_STATS = """
-MATCH (e:Entity {session_id: $session_id})
+MATCH (e:Entity {session_id: $session_id, user_id: $user_id})
 WITH count(e) AS entity_count
-MATCH (c:Chunk {session_id: $session_id})
+MATCH (c:Chunk {session_id: $session_id, user_id: $user_id})
 WITH entity_count, count(c) AS chunk_count
-OPTIONAL MATCH (:Entity {session_id: $session_id})-[r:RELATES]->(:Entity {session_id: $session_id})
+OPTIONAL MATCH (:Entity {session_id: $session_id, user_id: $user_id})-[r:RELATES]->(:Entity {session_id: $session_id, user_id: $user_id})
 RETURN entity_count, chunk_count, count(r) AS relationship_count
 """
 
 DELETE_SESSION_GRAPH = """
 MATCH (n)
-WHERE (n:Entity OR n:Chunk) AND n.session_id = $session_id
+WHERE (n:Entity OR n:Chunk) AND n.session_id = $session_id AND n.user_id = $user_id
 DETACH DELETE n
 """
 
 DELETE_DOCUMENT_GRAPH = """
-MATCH (c:Chunk {session_id: $session_id, document_id: $document_id})
+MATCH (c:Chunk {session_id: $session_id, user_id: $user_id, document_id: $document_id})
 DETACH DELETE c
-WITH $session_id AS session_id
-MATCH (e:Entity {session_id: session_id})
+WITH $session_id AS session_id, $user_id AS user_id
+MATCH (e:Entity {session_id: session_id, user_id: user_id})
 WHERE NOT (e)<-[:MENTIONS]-(:Chunk)
 DETACH DELETE e
 """
@@ -221,21 +221,21 @@ def link_mentions(chunk_id, entity_keys):
     return LINK_MENTION
 
 
-def search_chunks(session_id, vector, top_k):
-    return _run(SEARCH_CHUNKS, {"session_id": session_id, "vector": vector, "top_k": top_k}), SEARCH_CHUNKS
+def search_chunks(session_id, user_id, vector, top_k):
+    return _run(SEARCH_CHUNKS, {"session_id": session_id, "user_id": user_id, "vector": vector, "top_k": top_k}), SEARCH_CHUNKS
 
 
-def search_entities(session_id, vector, top_k):
-    return _run(SEARCH_ENTITIES, {"session_id": session_id, "vector": vector, "top_k": top_k}), SEARCH_ENTITIES
+def search_entities(session_id, user_id, vector, top_k):
+    return _run(SEARCH_ENTITIES, {"session_id": session_id, "user_id": user_id, "vector": vector, "top_k": top_k}), SEARCH_ENTITIES
 
 
-def expand_neighbourhood(session_id, keys, hops, limit=60):
+def expand_neighbourhood(session_id, user_id, keys, hops, limit=60):
     cypher = EXPAND_NEIGHBOURHOOD % {"hops": max(1, min(hops, 3))}
-    return _run(cypher, {"session_id": session_id, "keys": keys, "limit": limit}), cypher
+    return _run(cypher, {"session_id": session_id, "user_id": user_id, "keys": keys, "limit": limit}), cypher
 
 
-def session_graph(session_id):
-    rows = _run(SESSION_GRAPH, {"session_id": session_id})
+def session_graph(session_id, user_id):
+    rows = _run(SESSION_GRAPH, {"session_id": session_id, "user_id": user_id})
     if not rows:
         return {"nodes": [], "edges": []}, SESSION_GRAPH
     nodes = rows[0].get("nodes") or []
@@ -243,15 +243,15 @@ def session_graph(session_id):
     return {"nodes": nodes, "edges": edges}, SESSION_GRAPH
 
 
-def graph_stats(session_id):
-    rows = _run(GRAPH_STATS, {"session_id": session_id})
+def graph_stats(session_id, user_id):
+    rows = _run(GRAPH_STATS, {"session_id": session_id, "user_id": user_id})
     stats = rows[0] if rows else {"entity_count": 0, "chunk_count": 0, "relationship_count": 0}
     return stats, GRAPH_STATS
 
 
-def delete_session_graph(session_id):
-    _run(DELETE_SESSION_GRAPH, {"session_id": session_id}, write=True)
+def delete_session_graph(session_id, user_id):
+    _run(DELETE_SESSION_GRAPH, {"session_id": session_id, "user_id": user_id}, write=True)
 
 
-def delete_document_graph(session_id, document_id):
-    _run(DELETE_DOCUMENT_GRAPH, {"session_id": session_id, "document_id": document_id}, write=True)
+def delete_document_graph(session_id, user_id, document_id):
+    _run(DELETE_DOCUMENT_GRAPH, {"session_id": session_id, "user_id": user_id, "document_id": document_id}, write=True)

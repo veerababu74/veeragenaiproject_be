@@ -32,7 +32,7 @@ class BasicChatDatabaseTests(unittest.TestCase):
     def test_retains_only_ten_exchanges_and_never_has_api_key_column(self):
         session = create_session("user-1", "openai", "gpt-test", "First", self.database_path)
         for number in range(12):
-            add_exchange(session["id"], f"user-{number}", f"assistant-{number}", self.database_path)
+            add_exchange(session["id"], "user-1", f"user-{number}", f"assistant-{number}", self.database_path)
         messages = get_messages(session["id"], self.database_path)
         self.assertEqual(len(messages), 20)
         self.assertEqual(messages[0]["content"], "user-2")
@@ -48,7 +48,7 @@ class BasicChatDatabaseTests(unittest.TestCase):
         with patch("basichatapp.database.time.time", return_value=100):
             session = create_session("user-1", "gemini", "gemini-test", "First", self.database_path)
         with patch("basichatapp.database.time.time", return_value=1000):
-            renewed_expiry = add_exchange(session["id"], "hello", "hi", self.database_path)
+            renewed_expiry = add_exchange(session["id"], "user-1", "hello", "hi", self.database_path)
 
         self.assertEqual(renewed_expiry, 1000 + 24 * 60 * 60)
         cleanup_expired(self.database_path, now=renewed_expiry - 1)
@@ -66,7 +66,7 @@ class BasicChatDatabaseTests(unittest.TestCase):
         with patch("basichatapp.database.time.time", return_value=100):
             session = create_session("user-1", "openai", "gpt-test", "First", self.database_path)
         with patch("basichatapp.database.time.time", return_value=1000):
-            add_exchange(session["id"], "hello", "hi", self.database_path)
+            add_exchange(session["id"], "user-1", "hello", "hi", self.database_path)
         with closing(sqlite3.connect(self.database_path)) as connection:
             connection.execute(
                 "UPDATE sessions SET expires_at = ? WHERE id = ?",
@@ -89,7 +89,7 @@ class BasicChatDatabaseTests(unittest.TestCase):
         sessions = list_sessions("user-1", self.database_path)
         self.assertEqual([session["id"] for session in sessions], [second["id"], first["id"]])
 
-        title = update_session_title(second["id"], "My first question\ncontinued", self.database_path)
+        title = update_session_title(second["id"], "user-1", "My first question\ncontinued", self.database_path)
         self.assertEqual(title, "My first question continued")
         self.assertEqual(list_sessions("user-1", self.database_path)[0]["title"], title)
 

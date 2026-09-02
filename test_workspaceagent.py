@@ -227,7 +227,7 @@ class WorkspaceAgentConfirmationTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(HTTPException):
                 await confirm_action(ConfirmRequest(message_id=1), user_id="user-1")
 
-            release_action.assert_called_once_with(1)
+            release_action.assert_called_once_with(1, "user-1")
 
 
 if __name__ == "__main__":

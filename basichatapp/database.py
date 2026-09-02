@@ -108,10 +108,10 @@ def list_sessions(user_id, database_path=DATABASE_PATH):
     return [dict(row) for row in rows]
 
 
-def update_session_title(session_id, message, database_path=DATABASE_PATH):
+def update_session_title(session_id, user_id, message, database_path=DATABASE_PATH):
     title = message.strip().replace("\n", " ")[:60]
     with connect(database_path) as connection:
-        connection.execute("UPDATE sessions SET title = ? WHERE id = ?", (title, session_id))
+        connection.execute("UPDATE sessions SET title = ? WHERE id = ? AND user_id = ?", (title, session_id, user_id))
     return title
 
 
@@ -124,10 +124,12 @@ def get_messages(session_id, database_path=DATABASE_PATH):
     return [dict(row) for row in rows]
 
 
-def add_exchange(session_id, user_message, assistant_message, database_path=DATABASE_PATH):
+def add_exchange(session_id, user_id, user_message, assistant_message, database_path=DATABASE_PATH):
     now = int(time.time())
     expires_at = now + RETENTION_SECONDS
     with connect(database_path) as connection:
+        if not connection.execute("SELECT 1 FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_id)).fetchone():
+            return None
         connection.executemany(
             "INSERT INTO messages(session_id, role, content, created_at) VALUES (?, ?, ?, ?)",
             [

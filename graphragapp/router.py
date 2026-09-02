@@ -30,37 +30,37 @@ QUERY_TEMPLATES = {
     "all-entities": {
         "label": "List every entity in this session",
         "description": "Reads all Entity nodes created from your documents, newest first.",
-        "cypher": "MATCH (e:Entity {session_id: $session_id})\nRETURN e.name AS name, e.type AS type, e.description AS description\nORDER BY name\nLIMIT 100",
+        "cypher": "MATCH (e:Entity {session_id: $session_id, user_id: $user_id})\nRETURN e.name AS name, e.type AS type, e.description AS description\nORDER BY name\nLIMIT 100",
     },
     "all-relationships": {
         "label": "List every relationship",
         "description": "Reads each RELATES edge as a source, type, target triple.",
-        "cypher": "MATCH (a:Entity {session_id: $session_id})-[r:RELATES]->(b:Entity {session_id: $session_id})\nRETURN a.name AS source, r.type AS relationship, b.name AS target, r.description AS description\nLIMIT 100",
+        "cypher": "MATCH (a:Entity {session_id: $session_id, user_id: $user_id})-[r:RELATES]->(b:Entity {session_id: $session_id, user_id: $user_id})\nRETURN a.name AS source, r.type AS relationship, b.name AS target, r.description AS description\nLIMIT 100",
     },
     "most-connected": {
         "label": "Find the most connected entities",
         "description": "Ranks entities by degree, the classic way to find hubs in a graph.",
-        "cypher": "MATCH (e:Entity {session_id: $session_id})\nOPTIONAL MATCH (e)-[r:RELATES]-()\nRETURN e.name AS name, e.type AS type, count(r) AS degree\nORDER BY degree DESC\nLIMIT 20",
+        "cypher": "MATCH (e:Entity {session_id: $session_id, user_id: $user_id})\nOPTIONAL MATCH (e)-[r:RELATES]-()\nRETURN e.name AS name, e.type AS type, count(r) AS degree\nORDER BY degree DESC\nLIMIT 20",
     },
     "entity-types": {
         "label": "Count entities by type",
         "description": "Aggregation showing what kinds of things the extractor found.",
-        "cypher": "MATCH (e:Entity {session_id: $session_id})\nRETURN e.type AS type, count(*) AS total\nORDER BY total DESC",
+        "cypher": "MATCH (e:Entity {session_id: $session_id, user_id: $user_id})\nRETURN e.type AS type, count(*) AS total\nORDER BY total DESC",
     },
     "two-hop-paths": {
         "label": "Show two-hop paths",
         "description": "Multi-hop traversal, the capability that makes graph RAG different from vector RAG.",
-        "cypher": "MATCH path = (a:Entity {session_id: $session_id})-[:RELATES*2]-(b:Entity {session_id: $session_id})\nWHERE a.name < b.name\nRETURN a.name AS start, [n IN nodes(path) | n.name] AS hops, b.name AS end\nLIMIT 25",
+        "cypher": "MATCH path = (a:Entity {session_id: $session_id, user_id: $user_id})-[:RELATES*2]-(b:Entity {session_id: $session_id, user_id: $user_id})\nWHERE a.name < b.name\nRETURN a.name AS start, [n IN nodes(path) | n.name] AS hops, b.name AS end\nLIMIT 25",
     },
     "orphan-entities": {
         "label": "Find isolated entities",
         "description": "Entities with no relationships, useful for spotting weak extraction.",
-        "cypher": "MATCH (e:Entity {session_id: $session_id})\nWHERE NOT (e)-[:RELATES]-()\nRETURN e.name AS name, e.type AS type\nLIMIT 50",
+        "cypher": "MATCH (e:Entity {session_id: $session_id, user_id: $user_id})\nWHERE NOT (e)-[:RELATES]-()\nRETURN e.name AS name, e.type AS type\nLIMIT 50",
     },
     "chunk-mentions": {
         "label": "Show which chunk mentions which entity",
         "description": "Traverses the MENTIONS edge that links graph nodes back to source text.",
-        "cypher": "MATCH (c:Chunk {session_id: $session_id})-[:MENTIONS]->(e:Entity)\nRETURN c.filename AS file, c.position AS chunk, collect(e.name)[0..8] AS entities\nORDER BY chunk\nLIMIT 40",
+        "cypher": "MATCH (c:Chunk {session_id: $session_id, user_id: $user_id})-[:MENTIONS]->(e:Entity)\nRETURN c.filename AS file, c.position AS chunk, collect(e.name)[0..8] AS entities\nORDER BY chunk\nLIMIT 40",
     },
 }
 
@@ -143,8 +143,8 @@ async def session_graph(session_id: str, user_id: str = Depends(graph_rag_user_i
     if not await asyncio.to_thread(database.get_session, session_id, user_id):
         raise HTTPException(status_code=404, detail="Graph RAG session not found")
     try:
-        graph, graph_cypher = await asyncio.to_thread(graph_store.session_graph, session_id)
-        stats, stats_cypher = await asyncio.to_thread(graph_store.graph_stats, session_id)
+        graph, graph_cypher = await asyncio.to_thread(graph_store.session_graph, session_id, user_id)
+        stats, stats_cypher = await asyncio.to_thread(graph_store.graph_stats, session_id, user_id)
     except graph_store.GraphStoreError as error:
         raise _http_error(error) from error
     return {**graph, "stats": stats, "cypher": [graph_cypher.strip(), stats_cypher.strip()]}
@@ -158,7 +158,7 @@ async def run_query_template(session_id: str, template_id: str, user_id: str = D
     if not await asyncio.to_thread(database.get_session, session_id, user_id):
         raise HTTPException(status_code=404, detail="Graph RAG session not found")
     try:
-        rows = await asyncio.to_thread(graph_store._run, template["cypher"], {"session_id": session_id})
+        rows = await asyncio.to_thread(graph_store._run, template["cypher"], {"session_id": session_id, "user_id": user_id})
     except graph_store.GraphStoreError as error:
         raise _http_error(error) from error
     return {"id": template_id, "cypher": template["cypher"], "rows": rows}
@@ -171,7 +171,7 @@ async def delete_session(session_id: str, user_id: str = Depends(graph_rag_user_
         raise HTTPException(status_code=404, detail="Graph RAG session not found")
     documents = await asyncio.to_thread(database.list_documents, session_id, user_id)
     try:
-        await asyncio.to_thread(graph_store.delete_session_graph, session_id)
+        await asyncio.to_thread(graph_store.delete_session_graph, session_id, user_id)
         for document in documents:
             await asyncio.to_thread(bucket_storage.delete, document["remote_path"])
     except (graph_store.GraphStoreError, bucket_storage.BucketError) as error:
@@ -185,7 +185,7 @@ async def delete_document(document_id: str, user_id: str = Depends(graph_rag_use
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     try:
-        await asyncio.to_thread(graph_store.delete_document_graph, document["session_id"], document_id)
+        await asyncio.to_thread(graph_store.delete_document_graph, document["session_id"], user_id, document_id)
         await asyncio.to_thread(bucket_storage.delete, document["remote_path"])
     except (graph_store.GraphStoreError, bucket_storage.BucketError) as error:
         raise _http_error(error) from error
@@ -247,7 +247,7 @@ async def upload_document(
                     event["document"] = document
                 yield event
         except Exception:
-            graph_store.delete_document_graph(session_id, document_id)
+            graph_store.delete_document_graph(session_id, user_id, document_id)
             if stored:
                 try:
                     bucket_storage.delete(remote_path)
@@ -271,12 +271,12 @@ async def send_message(data: GraphChatRequest, user_id: str = Depends(graph_rag_
 
     def events():
         for event in pipeline.answer_question(
-            data.session_id, question, data.provider, data.api_key, data.model.strip(),
+            data.session_id, user_id, question, data.provider, data.api_key, data.model.strip(),
             data.embedding_api_key, data.embedding_model.strip(), data.top_k, data.hops, history,
         ):
             if event["step"] == "answer":
                 database.add_exchange(
-                    data.session_id, question, event["answer"], event["citations"], event["trace"]
+                    data.session_id, user_id, question, event["answer"], event["citations"], event["trace"]
                 )
             yield event
 

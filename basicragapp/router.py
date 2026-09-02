@@ -217,7 +217,7 @@ async def send_message(data: RagChatRequest, user_id: str = Depends(rag_user_id)
     except (EmbeddingError, vector_store.VectorStoreError, ProviderError) as error:
         raise _http_error(error) from error
     citations = [{"number": index, "filename": source["filename"], "position": source["position"], "score": source["score"], "text": source["text"]} for index, source in enumerate(sources, 1)]
-    saved = await asyncio.to_thread(database.add_exchange, data.session_id, data.message.strip(), answer, citations)
+    saved = await asyncio.to_thread(database.add_exchange, data.session_id, user_id, data.message.strip(), answer, citations)
     if not saved:
         logger.warning("RAG query discarded because session was deleted | session=%s", data.session_id)
         raise HTTPException(status_code=409, detail="This RAG session was deleted while the answer was being generated")

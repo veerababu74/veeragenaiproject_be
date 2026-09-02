@@ -28,7 +28,7 @@ class GraphStoreIntegrationTest(unittest.TestCase):
         graph_store.ensure_schema()
 
     def tearDown(self):
-        graph_store.delete_session_graph(self.session_id)
+        graph_store.delete_session_graph(self.session_id, self.user_id)
 
     def test_graph_is_built_searched_traversed_and_deleted(self):
         entities = [
@@ -49,28 +49,28 @@ class GraphStoreIntegrationTest(unittest.TestCase):
         )
         graph_store.link_mentions("doc-1:0", [entity["key"] for entity in written])
 
-        chunks, _ = graph_store.search_chunks(self.session_id, vector(1.0), 5)
+        chunks, _ = graph_store.search_chunks(self.session_id, self.user_id, vector(1.0), 5)
         self.assertEqual(len(chunks), 1)
         self.assertAlmostEqual(chunks[0]["score"], 1.0, places=5)
 
-        found, _ = graph_store.search_entities(self.session_id, vector(1.0), 5)
+        found, _ = graph_store.search_entities(self.session_id, self.user_id, vector(1.0), 5)
         self.assertEqual(found[0]["name"], "Ada Lovelace")
 
-        triples, _ = graph_store.expand_neighbourhood(self.session_id, [written[0]["key"]], hops=2)
+        triples, _ = graph_store.expand_neighbourhood(self.session_id, self.user_id, [written[0]["key"]], hops=2)
         self.assertEqual(
             [(row["source"], row["relationship"], row["target"]) for row in triples],
             [("Ada Lovelace", "WROTE_ABOUT", "Analytical Engine")],
         )
 
-        stats, _ = graph_store.graph_stats(self.session_id)
+        stats, _ = graph_store.graph_stats(self.session_id, self.user_id)
         self.assertEqual((stats["entity_count"], stats["chunk_count"], stats["relationship_count"]), (2, 1, 1))
 
-        graph, _ = graph_store.session_graph(self.session_id)
+        graph, _ = graph_store.session_graph(self.session_id, self.user_id)
         self.assertEqual(len(graph["nodes"]), 2)
         self.assertEqual(len(graph["edges"]), 1)
 
-        graph_store.delete_session_graph(self.session_id)
-        stats, _ = graph_store.graph_stats(self.session_id)
+        graph_store.delete_session_graph(self.session_id, self.user_id)
+        stats, _ = graph_store.graph_stats(self.session_id, self.user_id)
         self.assertEqual(stats["entity_count"], 0)
 
     def test_sessions_cannot_read_each_other(self):
@@ -80,17 +80,17 @@ class GraphStoreIntegrationTest(unittest.TestCase):
             [{"name": "Private Fact", "type": "Concept", "description": "secret"}], [vector(1.0)],
         )
         try:
-            rows, _ = graph_store.search_entities(other_session, vector(1.0), 5)
+            rows, _ = graph_store.search_entities(other_session, self.user_id, vector(1.0), 5)
             self.assertEqual(rows, [])
         finally:
-            graph_store.delete_session_graph(other_session)
+            graph_store.delete_session_graph(other_session, self.user_id)
 
     def test_every_query_template_is_valid_cypher(self):
         from graphragapp.router import QUERY_TEMPLATES
 
         for template_id, template in QUERY_TEMPLATES.items():
             with self.subTest(template=template_id):
-                graph_store._run(template["cypher"], {"session_id": self.session_id})
+                graph_store._run(template["cypher"], {"session_id": self.session_id, "user_id": self.user_id})
 
 
 EXTRACTED = {
@@ -125,7 +125,7 @@ class GraphRagStreamingTest(unittest.TestCase):
 
     def tearDown(self):
         if self.session_id:
-            graph_store.delete_session_graph(self.session_id)
+            graph_store.delete_session_graph(self.session_id, self.user_id)
 
     def _events(self, response):
         self.assertEqual(response.status_code, 200)

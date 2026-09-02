@@ -163,7 +163,10 @@ class LandingContentTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("basic-chat", [project.id for project in content.projects])
         self.assertEqual(
             [project.id for project in content.projects],
-            ["intelligent-motion", "vision-lab"],
+            [
+                "basic-rag", "advanced-rag", "google-workspace-agent", "graph-rag",
+                "chunking-lab", "agent-orchestration", "intelligent-motion", "vision-lab",
+            ],
         )
 
     @patch("Admin.landing.project_catalog.find_one", new_callable=AsyncMock)
