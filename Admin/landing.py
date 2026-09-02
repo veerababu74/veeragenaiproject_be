@@ -235,16 +235,12 @@ async def get_project_catalog():
     ]
     if missing:
         content.projects.extend(missing)
-        try:
-            await project_catalog.update_one(
-                {"_id": "default"},
-                {
-                    "$push": {"projects": {"$each": [p.model_dump() for p in missing]}},
-                    "$set": {"updated_at": datetime.now(timezone.utc)},
-                },
-            )
-        except Exception:
-            pass
+        for project in BUILT_IN_PROJECTS:
+            if project["id"] not in existing_ids:
+                try:
+                    await _ensure_built_in_project(project)
+                except Exception:
+                    pass
 
     for project in content.projects:
         if not project.blog_slug and project.id in PROJECT_DEFAULT_BLOGS:
@@ -269,73 +265,48 @@ async def migrate_project_catalog():
     await save_project_catalog(content, "migration")
 
 
-async def ensure_basic_rag_project():
-    document = await project_catalog.find_one({"_id": "default"})
-    if not document:
+async def _ensure_built_in_project(project: dict):
+    """Idempotently add a built-in project to the catalog exactly once.
+
+    This used to read the document, check whether the id was already present, and
+    only then $push — three separate steps with no atomicity between them. Under
+    concurrent serverless cold starts (e.g. several instances starting up during a
+    Vercel deploy) two of them could both see the project missing and each push a
+    copy, corrupting the catalog with duplicate ids (which ProjectCatalog's
+    require_unique_project_ids validator then rejects, breaking /portfolio entirely).
+
+    A single filtered update is atomic at the document level: MongoDB only applies
+    the $push if no array element already has that id, so a duplicate can't be
+    created no matter how many instances race to call this at once.
+    """
+    result = await project_catalog.update_one(
+        {"_id": "default", "projects.id": {"$ne": project["id"]}},
+        {"$push": {"projects": project}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+    )
+    if result.matched_count == 0 and not await project_catalog.find_one({"_id": "default"}):
         content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.append(LandingPortfolioProject(**BASIC_RAG_PROJECT))
+        content.projects.append(LandingPortfolioProject(**project))
         await save_project_catalog(content, "built-in-project")
-    elif not any(project.get("id") == BASIC_RAG_PROJECT["id"] for project in document.get("projects", [])):
-        await project_catalog.update_one(
-            {"_id": "default"},
-            {"$push": {"projects": BASIC_RAG_PROJECT}, "$set": {"updated_at": datetime.now(timezone.utc)}},
-        )
+
+
+async def ensure_basic_rag_project():
+    await _ensure_built_in_project(BASIC_RAG_PROJECT)
 
 
 async def ensure_advanced_rag_project():
-    document = await project_catalog.find_one({"_id": "default"})
-    if not document:
-        content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.extend(LandingPortfolioProject(**project) for project in (BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT))
-        await save_project_catalog(content, "built-in-project")
-    elif not any(project.get("id") == ADVANCED_RAG_PROJECT["id"] for project in document.get("projects", [])):
-        await project_catalog.update_one(
-            {"_id": "default"},
-            {"$push": {"projects": ADVANCED_RAG_PROJECT}, "$set": {"updated_at": datetime.now(timezone.utc)}},
-        )
+    await _ensure_built_in_project(ADVANCED_RAG_PROJECT)
 
 
 async def ensure_google_workspace_agent_project():
-    document = await project_catalog.find_one({"_id": "default"})
-    if not document:
-        content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.extend(LandingPortfolioProject(**project) for project in (BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT))
-        await save_project_catalog(content, "built-in-project")
-    elif not any(project.get("id") == GOOGLE_WORKSPACE_AGENT_PROJECT["id"] for project in document.get("projects", [])):
-        await project_catalog.update_one(
-            {"_id": "default"},
-            {"$push": {"projects": GOOGLE_WORKSPACE_AGENT_PROJECT}, "$set": {"updated_at": datetime.now(timezone.utc)}},
-        )
+    await _ensure_built_in_project(GOOGLE_WORKSPACE_AGENT_PROJECT)
 
 
 async def ensure_graph_rag_project():
-    document = await project_catalog.find_one({"_id": "default"})
-    if not document:
-        content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.extend(LandingPortfolioProject(**project) for project in (
-            BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT
-        ))
-        await save_project_catalog(content, "built-in-project")
-    elif not any(project.get("id") == GRAPH_RAG_PROJECT["id"] for project in document.get("projects", [])):
-        await project_catalog.update_one(
-            {"_id": "default"},
-            {"$push": {"projects": GRAPH_RAG_PROJECT}, "$set": {"updated_at": datetime.now(timezone.utc)}},
-        )
+    await _ensure_built_in_project(GRAPH_RAG_PROJECT)
 
 
 async def ensure_chunking_lab_project():
-    document = await project_catalog.find_one({"_id": "default"})
-    if not document:
-        content = ProjectCatalog(**DEFAULT_PROJECT_CATALOG)
-        content.projects.extend(LandingPortfolioProject(**project) for project in (
-            BASIC_RAG_PROJECT, ADVANCED_RAG_PROJECT, GOOGLE_WORKSPACE_AGENT_PROJECT, GRAPH_RAG_PROJECT, CHUNKING_LAB_PROJECT
-        ))
-        await save_project_catalog(content, "built-in-project")
-    elif not any(project.get("id") == CHUNKING_LAB_PROJECT["id"] for project in document.get("projects", [])):
-        await project_catalog.update_one(
-            {"_id": "default"},
-            {"$push": {"projects": CHUNKING_LAB_PROJECT}, "$set": {"updated_at": datetime.now(timezone.utc)}},
-        )
+    await _ensure_built_in_project(CHUNKING_LAB_PROJECT)
 
 
 async def save_project_catalog(content: ProjectCatalog, updated_by):
