@@ -624,9 +624,14 @@ async def ensure_project_guides():
                 "_id": "default",
                 "projects": {"$elemMatch": {
                     "id": guide["project_id"],
+                    # An unlinked project stores the field as missing, null, *or*
+                    # an empty string depending on how its catalog entry was
+                    # created. Matching only the first two left projects
+                    # permanently unlinked with blog_slug: "".
                     "$or": [
                         {"blog_slug": {"$exists": False}},
                         {"blog_slug": None},
+                        {"blog_slug": ""},
                     ],
                 }},
             },

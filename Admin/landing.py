@@ -219,6 +219,7 @@ PROJECT_DEFAULT_BLOGS = {
     "google-workspace-agent": "how-google-workspace-agent-works",
     "chunking-lab": "chunking-strategies-visualizer",
     "graph-rag": "how-real-time-graph-rag-works",
+    "agent-orchestration": "how-multi-agent-orchestration-works",
 }
 
 
