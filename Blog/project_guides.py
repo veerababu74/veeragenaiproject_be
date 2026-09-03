@@ -470,6 +470,146 @@ PROJECT_GUIDES = [
 			),
 		],
 	},
+	{
+		"slug": "how-multi-agent-orchestration-works",
+		"title": "Inside the Agent Orchestrator",
+		"description": "How a drawn graph of agents becomes a real run: the four orchestration modes, agent-to-agent delegation and its guards, the tools an agent can call, and the trace that shows why it answered the way it did.",
+		"tags": ["Agent Orchestration", "LangGraph", "Multi-agent", "Tools", "Observability", "Tracing"],
+		"project_id": "agent-orchestration",
+		"published": True,
+		"blocks": [
+			heading("What this project does", 1),
+			paragraph("Agent Orchestrator is a canvas for building a team of AI agents. You create an agent, give it a system prompt, a provider and a model, attach the tools it may use, and connect it to other agents. Then you chat with any agent in the graph. It answers you directly when it can, and consults the agents it is connected to when it cannot. Most multi-agent demos are one agent with an elaborate prompt; here each agent is a separate configured worker with its own model, its own tools, and its own instructions."),
+			heading("What makes it different"),
+			paragraph("Every step of a run is recorded and shown to you. Not just the final answer, but the question, what the agent reasoned before it acted, which tool or which other agent it decided to use and with what arguments, what came back, how long each step took, and how many tokens it cost. When an answer is wrong, you can see the exact step where it went wrong instead of guessing."),
+			heading("How to use it"),
+			steps(
+				"Open **Agent Orchestrator** from the Projects workspace and click **New Agent**.",
+				"Give the agent a name, a system prompt, a provider, and a model. Type any model name your provider supports; the list is only a shortcut.",
+				"Paste the provider API key on the agent form. One key is stored per provider and shared by every agent using it.",
+				"Add tools under the **Tools** tab, then attach them to an agent from its config panel.",
+				"Drag from one node's edge to another to connect two agents, then click the connection to say when that agent should be consulted.",
+				"Choose an **Orchestration** mode on the agent you intend to chat with, then press play on that node and ask a question.",
+				"Open **Traces** to replay the run step by step, or **Keys and Runs** to see recent runs and provider keys.",
+			),
+			heading("System architecture"),
+			diagram("""flowchart TD
+  UI[React canvas and chat] -->|Shared JWT| API[FastAPI routers]
+  API --> ORCH[Orchestrator]
+  ORCH --> MODE[Orchestration mode]
+  ORCH --> GRAPH[LangGraph agent loop]
+  GRAPH --> TOOLS[Tool builder]
+  TOOLS --> BUILTIN[Built in tools]
+  TOOLS --> CUSTOM[Custom HTTP tools]
+  TOOLS --> RAGT[Document search]
+  ORCH --> TRACER[Run tracer]
+  TRACER --> DB[(SQLite for 48 hours)]
+  GRAPH --> LLM[Chosen LLM provider]
+  RAGT --> PINE[(Pinecone vectors)]
+  API --> HF[(Hugging Face originals)]"""),
+			heading("The four orchestration modes"),
+			paragraph("A connection means these two agents are allowed to talk. It does not decide the order they run in. That is chosen separately, per agent, by its orchestration mode. Splitting the two is deliberate: the graph describes capability, the mode describes procedure, so the direction you happened to drag a connection never changes the result."),
+			table(
+				["Mode", "What happens", "Use it when"],
+				[
+					["Supervisor", "Each connected agent is offered to the model as a tool and it decides which to ask, if any", "The right specialist depends on the question"],
+					["Sequential", "Every connected agent runs in turn, each one shown what the previous ones answered", "Later work builds on earlier work"],
+					["Parallel", "All connected agents are asked at the same time and their answers are merged", "The sub-questions are independent"],
+					["Conditional", "Only the agents whose condition matches the question run", "Different questions belong to different specialists"],
+				],
+			),
+			paragraph("In every mode except Supervisor the agent you chat with is the one that writes the final answer. The mode only decides how its connected agents contribute first. Conditional routing uses the same text you type on a connection, and it is checked in a single classification call covering every connection at once rather than one call per connection."),
+			heading("How one question is answered"),
+			diagram("""sequenceDiagram
+  participant U as You
+  participant API as FastAPI
+  participant O as Orchestration step
+  participant P as Connected agents
+  participant G as LangGraph loop
+  participant T as Tools
+  U->>API: Question to a chosen agent
+  API->>O: Apply the orchestration mode
+  O->>P: Run connected agents if the mode says so
+  P-->>O: Their answers
+  O->>G: Question plus gathered answers
+  G->>T: Call a tool the model selected
+  T-->>G: Tool result
+  G->>G: Loop until no more tools are needed
+  G-->>API: Final answer
+  API-->>U: Streamed text, live steps, and the recorded trace"""),
+			heading("Agent to agent delegation"),
+			paragraph("In Supervisor mode each connected agent is turned into a tool named after it, such as ask_weather_expert. The model already knows how to choose between tools, so it already knows how to choose between agents. A consulted agent runs its own graph with its own prompt, model, and tools, and returns an answer that the asking agent can use or combine with others."),
+			paragraph("Because an agent can ask an agent, a loop is one careless connection away. Two independent guards prevent it."),
+			bullets(
+				"A depth limit stops delegation after three hops, so a long chain cannot run forever.",
+				"Every agent already visited on the current path is removed from the next agent's options, so a cycle back to an earlier agent cannot form.",
+				"An agent that is consulted runs in the ordinary Supervisor way, which bounds how far a large graph can multiply.",
+				"If a consulted agent fails, its error is returned as that agent's answer rather than ending the whole run.",
+			),
+			heading("The tools an agent can use"),
+			paragraph("Tools are created once under the Tools tab and then attached to whichever agents should have them. Built-in tools that need a credential ask for that service's own key, which is not the same as the model API key on the agent."),
+			table(
+				["Tool", "What it does", "Needs a key"],
+				[
+					["Date and time", "Current date, time, and day of week in any offset", "No"],
+					["Calculator", "Exact arithmetic instead of mental maths", "No"],
+					["Web page reader", "Fetches a URL and returns its readable text", "No"],
+					["HTTP request", "Calls any JSON API endpoint", "No"],
+					["DuckDuckGo", "Free web search", "No"],
+					["Tavily and Google via Serper", "Higher quality web search", "Yes"],
+					["Slack", "Posts a message to a channel", "Yes"],
+					["GitHub", "Reads and creates issues, reads commits", "Yes"],
+					["Document search", "Searches your own uploaded documents", "Uses your saved Gemini key"],
+					["Custom API tool", "Any endpoint you describe, with typed fields", "Only if the endpoint needs one"],
+				],
+			),
+			paragraph("A custom tool is described once as a URL, a method, and a set of fields. Those fields become the typed arguments the model fills in. Placeholders in the URL are substituted from the arguments, and the remaining values are sent as a query string or a JSON body depending on the method. If one tool is misconfigured it is skipped with a log line rather than breaking the agent it belongs to."),
+			heading("What the trace records"),
+			paragraph("Every run is captured by a callback attached to the whole graph, which means a consulted agent's own reasoning and tool calls land in the same timeline, in the right order, attributed to the agent that produced them."),
+			table(
+				["Step", "What it tells you"],
+				[
+					["Question", "The exact text the run started from"],
+					["Reasoning", "What the model said at the moment it decided, and which tools that decision produced"],
+					["Tool call", "The tool chosen and the arguments it was given"],
+					["Tool result", "What came back, and how long the call took"],
+					["Delegation", "A question sent to a connected agent, and that agent's answer"],
+					["Answer", "The final response, with total duration and token usage"],
+				],
+			),
+			paragraph("The Traces view aggregates across runs as well: success rate, average and slowest durations, tokens consumed, and which tools and agents are used most and fail most. The reasoning steps are the important part, because they are the difference between a log of what happened and an explanation of why."),
+			heading("Document search"),
+			diagram("""flowchart LR
+  UP[Upload PDF DOCX or TXT] --> EX[Text extraction]
+  EX --> CH[Chunking with overlap]
+  CH --> EM[Gemini embeddings]
+  EM --> PC[(Pinecone namespace per user)]
+  UP --> HFS[(Hugging Face original file)]
+  Q[Agent asks the search tool] --> QE[Embed the question]
+  QE --> PC
+  PC --> RES[Matching chunks returned to the agent]"""),
+			paragraph("Uploads are limited to four megabytes. The embedding key you supply at upload time is used for that upload only and is never stored. The search tool embeds the question with the same embedding model your documents were built with, because vectors produced by different models cannot be compared meaningfully."),
+			heading("Everything disappears after 48 hours"),
+			paragraph("Agents, connections, tools, documents, chat history, run traces, and provider API keys are all deleted 48 hours after they are created. A sweep runs every hour and removes the vectors in Pinecone and the original files in Hugging Face before removing the database rows, so nothing is left stranded in an external service."),
+			bullets(
+				"Provider API keys are stored only for as long as the rest of your data and are removed by the same sweep.",
+				"Use **Export** to download your whole workspace as a JSON file before it expires, and **Import** to restore it later.",
+				"Exports deliberately exclude API keys and other credentials, because the file is meant to be saved and shared; re-enter them after importing.",
+				"A run that fails is not written to conversation memory, so one error does not affect the next question.",
+			),
+			heading("Design decisions worth knowing"),
+			table(
+				["Decision", "Why"],
+				[
+					["Connections are not directional", "People draw the arrows both ways, and either reading is reasonable, so direction was removed as a source of surprise"],
+					["The agent you chat with always answers", "You asked that agent, so the reply should come from it no matter how the work was divided"],
+					["Model names are typed, not picked from a list", "Providers release and retire models constantly, and a fixed list would block a new model until the app was redeployed"],
+					["Conditional routing fails open", "If the routing check cannot be understood, every candidate agent contributes rather than none, so a routing problem never leaves you without an answer"],
+					["One key per provider, entered on the agent", "An agent chooses its provider when you create it, so that is the moment the key is needed"],
+				],
+			),
+		],
+	},
 ]
 
 

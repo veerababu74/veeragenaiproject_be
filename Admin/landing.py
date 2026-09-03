@@ -112,6 +112,7 @@ AGENT_ORCHESTRATION_PROJECT = {
     "image_alt": "Connected nodes representing a multi-agent orchestration graph", "status": "available",
     "featured": False, "show_public": True, "show_workspace": True, "display_order": 7,
     "project_url": "#signin",
+    "blog_slug": "how-multi-agent-orchestration-works",
 }
 
 
