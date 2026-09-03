@@ -155,19 +155,20 @@ async def get_blog(slug: str):
 @admin_router.get("/blogs", response_model=BlogListResponse)
 async def admin_list_blogs(
     page: int = Query(1, ge=1),
+    page_size: int = Query(PAGE_SIZE, ge=1, le=PAGE_SIZE),
     _: dict = Depends(_require_admin),
 ):
     blogs = _blogs()
-    skip = (page - 1) * PAGE_SIZE
-    cursor = blogs.find({}, {"blocks": 0}).sort("created_at", -1).skip(skip).limit(PAGE_SIZE)
-    docs = await cursor.to_list(length=PAGE_SIZE)
+    skip = (page - 1) * page_size
+    cursor = blogs.find({}, {"blocks": 0}).sort("created_at", -1).skip(skip).limit(page_size)
+    docs = await cursor.to_list(length=page_size)
     total = await blogs.count_documents({})
     return {
         "posts": [_doc_to_list_item(doc) for doc in docs],
         "total": total,
         "page": page,
-        "page_size": PAGE_SIZE,
-        "total_pages": max(1, ceil(total / PAGE_SIZE)),
+        "page_size": page_size,
+        "total_pages": max(1, ceil(total / page_size)),
     }
 
 
