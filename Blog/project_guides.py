@@ -610,6 +610,245 @@ PROJECT_GUIDES = [
 			),
 		],
 	},
+	{
+		"slug": "how-simpleagent-chooses-tools",
+		"title": "Inside SimpleAgent: Watching an Agent Choose Its Tools",
+		"description": "One agent, up to ten tools, and a live view of the think-act loop: what the model was told, what it reasoned, which tool it picked, what came back, and in what order.",
+		"tags": ["AI Agent", "Tool Calling", "Observability", "LangGraph", "RAG", "Chunking"],
+		"project_id": "simple-agent",
+		"published": True,
+		"blocks": [
+			heading("The question this project answers", 1),
+			paragraph("When an AI agent gives you an answer, you normally see the answer and nothing else. You cannot tell whether it searched the web or guessed, whether it did the arithmetic or estimated it, or whether it called one tool or four. SimpleAgent removes that opacity. You build one agent, attach the tools it may use, and then every decision it makes is drawn on screen while it happens."),
+			paragraph("This is deliberately one agent rather than a team of them. There is no delegation to follow and no graph to lay out, so nothing competes for attention with the thing being demonstrated: how a language model decides which tool to call, and what it does when the first tool does not finish the job."),
+			heading("What a round is, and why it is the important number"),
+			paragraph("An agent does not plan everything up front. It is called, it either answers or asks for tools, the tools run, and then it is called again with what they returned. Each pass of that cycle is a round. A one-round run means the model answered from what it already knew. A three-round run means it looked at a tool result and decided it needed something else — which is the behaviour people mean when they say an agent is reasoning."),
+			paragraph("SimpleAgent numbers the rounds and numbers the tool calls across the whole run, so the ordering is legible at a glance: search first, then open the page it found, then do the arithmetic on what the page said."),
+			heading("How to use it"),
+			steps(
+				"Open **SimpleAgent** from the Projects workspace and either write your own agent or press **Load this example** on one of the ready-made ones.",
+				"Give the agent a name, a description, a system message, a provider and a model, then paste that provider's API key.",
+				"Open **Tools** and add what the agent may use. Six of the twelve built-in tools need no API key at all.",
+				"Attach up to ten tools to the agent. Only attached tools are offered to the model.",
+				"Optionally upload a document under **Documents**, choose a chunking strategy, and attach the **Document Search** tool so the agent can search your own files.",
+				"Open **Run**, ask a question that needs more than one tool, and watch the trace on the right build itself round by round.",
+				"Open **History** to replay any earlier run step by step.",
+			),
+			heading("System architecture"),
+			diagram("""flowchart TD
+  UI[React console and live trace] -->|Shared auth cookie| API[FastAPI service]
+  API --> AUTH[JWT verified against the platform secret]
+  API --> LOOP[LangGraph think-act loop]
+  LOOP --> MODEL[Chosen LLM provider]
+  LOOP --> TOOLS[Tool node]
+  TOOLS --> BUILTIN[Built in tools]
+  TOOLS --> CUSTOM[Custom HTTP tools]
+  TOOLS --> SEARCH[Document search]
+  SEARCH --> PINE[(Pinecone vectors)]
+  LOOP --> TRACER[Run tracer callback]
+  TRACER --> QUEUE[Live event queue]
+  TRACER --> DB[(SQLite, 48 hours)]
+  QUEUE -->|Server sent events| UI
+  API --> HF[(Hugging Face originals)]"""),
+			heading("How one question is answered"),
+			diagram("""sequenceDiagram
+  participant U as You
+  participant API as FastAPI
+  participant G as LangGraph loop
+  participant M as Model
+  participant T as Tools
+  U->>API: A question
+  API->>U: context step, the prompt and tool list
+  API->>G: Start the loop
+  G->>M: System message plus history plus question
+  M-->>G: Reasoning plus the tools it chose
+  G->>U: think step, streamed as it happens
+  G->>T: Run each chosen tool
+  T-->>G: Results
+  G->>U: tool_call and tool_result steps, numbered
+  G->>M: The same conversation plus the tool results
+  M-->>G: Either more tools, or the final answer
+  G->>U: answer step with rounds, tools and tokens"""),
+			heading("What the trace records"),
+			table(
+				["Step", "What it tells you"],
+				[
+					["Context", "The exact system message the model receives, and the name, description and argument schema of every tool it may choose from"],
+					["Question", "The text the run started from"],
+					["Reasoning", "What the model said at the moment it decided, and which tools that decision produced"],
+					["Tool call", "The tool chosen, its arguments, and its position in the run's tool order"],
+					["Tool result", "What came back, and how long the call took"],
+					["Answer", "The final response, with round count, tool count, duration and token usage"],
+				],
+			),
+			paragraph("The context step is the one that is usually missing elsewhere. A tool choice can only be judged against the information the choice was made from, so the prompt and the tool descriptions are recorded before the model ever sees them, and shown next to the decision they produced."),
+			heading("The tools an agent can use"),
+			table(
+				["Tool", "What it does", "Needs a key"],
+				[
+					["Date and time", "Current date, time and day of the week in any offset", "No"],
+					["Calculator", "Exact arithmetic instead of mental maths", "No"],
+					["Web search", "DuckDuckGo results", "No"],
+					["Wikipedia", "Factual background on a person, place or concept", "No"],
+					["Currency converter", "Conversion at today's published rate", "No"],
+					["Web page reader", "Fetches a URL and returns its readable text", "No"],
+					["HTTP request", "Calls any JSON API endpoint", "No"],
+					["Tavily and Google via Serper", "Higher quality web search", "Yes"],
+					["Slack", "Posts a message to a channel", "Yes"],
+					["GitHub", "Reads and creates issues, reads commits", "Yes"],
+					["Document search", "Vector search over your own uploaded files", "Uses your Gemini key"],
+					["Custom API tool", "Any endpoint you describe, with typed arguments", "Only if the endpoint needs one"],
+				],
+			),
+			paragraph("Half the catalogue works without signing up for anything, which is intentional: watching an agent sequence tools should not be gated behind a search provider account. A custom tool is described once as a URL, a method and a list of typed fields; those fields become the arguments the model fills in, and a placeholder in the URL is substituted from them."),
+			heading("Documents and the four chunking strategies"),
+			paragraph("Uploading a document extracts it into typed structural blocks — headings, paragraphs, bullets, tables and images — before any chunking happens. Three of the strategies then work on the flattened text, but context-aware needs to know what each piece of text was, and that cannot be recovered from a flat string afterwards."),
+			table(
+				["Strategy", "How it splits", "Best for"],
+				[
+					["Fixed", "A plain character window with overlap", "A uniform baseline to compare against"],
+					["Recursive", "Paragraph, then sentence, then word boundaries", "General documents"],
+					["Semantic", "Where consecutive sentences stop being about the same thing", "Mixed-topic narrative text"],
+					["Context-aware", "On structure: a heading starts a chunk and is repeated in every chunk beneath it, and a table is never cut except on row boundaries", "Reports, specifications and spreadsheets"],
+				],
+			),
+			diagram("""flowchart LR
+  UP[Upload PDF DOCX TXT or CSV] --> EX[Structural extraction]
+  EX --> BL[Typed blocks]
+  BL --> ST{Chosen strategy}
+  ST --> F[Fixed]
+  ST --> R[Recursive]
+  ST --> S[Semantic]
+  ST --> C[Context aware]
+  F --> EM[Gemini embeddings]
+  R --> EM
+  S --> EM
+  C --> EM
+  EM --> PC[(Pinecone, one namespace per user)]
+  UP --> HFS[(Hugging Face original file)]"""),
+			paragraph("Uploads are limited to five megabytes per user across all their documents. The Gemini key supplied at upload time is kept so the search tool can embed queries with the same model the documents were built with — vectors from different models are not comparable, so mixing them would silently degrade every search."),
+			heading("What is deliberately visible"),
+			bullets(
+				"**The system message, verbatim.** Including the sentence the application appends when tools are present, so nothing the model was told is hidden from the person reading the run.",
+				"**Every tool description.** These are what the model actually chooses between, so a surprising tool choice can be traced to a vague description rather than blamed on the model.",
+				"**Arguments, not just names.** Seeing that the model called the calculator with the wrong expression is a different diagnosis from seeing that it called the calculator.",
+				"**Tools called together versus in sequence.** Two tools in one round were chosen simultaneously; a tool in the next round was chosen after reading a result.",
+				"**Failures in place.** A tool that errors is shown where it ran, because what the agent did next is the interesting part.",
+			),
+			heading("Everything disappears after 48 hours"),
+			paragraph("The agent, its tools, the provider API keys, uploaded documents, conversations and every stored trace are deleted 48 hours after they are created. A sweep removes the Pinecone vectors and the Hugging Face originals before the database rows that point at them, so nothing is left stranded in an external service."),
+			heading("Design decisions worth knowing"),
+			table(
+				["Decision", "Why"],
+				[
+					["One agent per user", "The subject is how a single agent decides. A second agent would add a selection step and a way to end up watching the wrong one"],
+					["Ten tools at most", "Past roughly ten tools, model tool choice degrades and the trace stops being readable — the limit protects both"],
+					["The trace is a callback, not manual logging", "Callbacks fire from inside the loop, so they see the real order of events rather than the order somebody remembered to log them in"],
+					["Steps stream live but are written once at the end", "The browser needs each event immediately; the database needs one transaction so the sequence stays contiguous"],
+					["Model names are typed, not chosen from a list", "Providers release and retire models constantly, and a fixed list would block a new model until the application was redeployed"],
+					["Keys are stored per provider, not per agent", "The key is needed when the agent is created, but changing the model should not mean re-entering it"],
+				],
+			),
+		],
+	},
+	{
+		"slug": "how-a-transformer-actually-works",
+		"title": "Inside an LLM: Watching a Transformer Think",
+		"description": "A real GPT-2 forward pass, captured layer by layer and drawn on screen — tokenization, embeddings, the attention arithmetic, and the moment the answer appears.",
+		"tags": ["Transformers", "Attention", "Interpretability", "GPT-2", "Education"],
+		"project_id": "inside-llm",
+		"published": True,
+		"blocks": [
+			heading("Not a metaphor", 1),
+			paragraph("Most explanations of language models reach for analogy: attention is like a spotlight, embeddings are like a map of meaning. Analogies are useful right up to the point where you want to know what the machine is actually doing, and then they stop. This project takes the other route. It runs a real GPT-2 over ten fixed sentences and shows the numbers that come out — the actual token IDs, the actual attention weights, the actual dot products — at every step between the text going in and a word coming out."),
+			paragraph("Nothing here is simulated. The forward pass was implemented from scratch in numpy over GPT-2's published weights, and every value on screen was read out of that computation."),
+			heading("The decision that makes it cheap"),
+			paragraph("The project accepts no typed input. That sounds like a limitation and is really the central design decision, because it means every number can be computed once, ahead of time, and saved."),
+			paragraph("The consequence is that the running service holds no model at all. There is no PyTorch, no 548-megabyte weight file in memory, no inference on the request path. A visitor loads a few tens of kilobytes of JSON that was computed in advance, and the server's only job is to hand over a file. The whole thing fits comfortably on a two-core machine with two gigabytes of memory, which is what it runs on."),
+			paragraph("The teaching argument is the stronger one though. An arbitrary sentence usually demonstrates nothing in particular. Each of the ten examples was chosen because it makes one specific mechanism visible, so the walkthrough can point at exactly where to look."),
+			heading("What is built, and when"),
+			diagram("""flowchart TD
+  W[GPT-2 weights, 548 MB] --> B[Build script, run once by hand]
+  T[Ten fixed sentences] --> B
+  B --> TOK[Real BPE tokenization, every merge recorded]
+  B --> FWD[numpy forward pass, instrumented]
+  FWD --> ATT[144 attention matrices per sentence]
+  FWD --> EMB[Embeddings, positions, neighbours]
+  FWD --> LENS[Logit lens at every layer]
+  FWD --> MATH[One head's arithmetic in full]
+  TOK --> J[(JSON artifacts, 648 KB total)]
+  ATT --> J
+  EMB --> J
+  LENS --> J
+  MATH --> J
+  J --> S[FastAPI serves the bytes]
+  S --> UI[React draws them]"""),
+			paragraph("Everything above the JSON node happens on a developer's machine. Everything below it is what the server does, and it is only file reads."),
+			heading("The nine components"),
+			table(
+				["Step", "What it does", "What the project shows"],
+				[
+					["Tokenization", "Text becomes integers from a fixed vocabulary", "Every byte-pair merge in the order applied, with the rank that selected it"],
+					["Token embeddings", "Each integer indexes a learned 768-number row", "The vector itself, and the nearest tokens in embedding space"],
+					["Positional encoding", "Order is added, because attention has no sense of it", "GPT-2's learned position vectors beside sinusoidal and rotary schemes"],
+					["Layer normalisation", "Each token's vector is recentred and rescaled", "Why the residual stream would otherwise grow without bound"],
+					["Self-attention", "Each token reads from the tokens before it", "The complete arithmetic for one head: dot product, scaling, mask, softmax, weighted sum"],
+					["Multi-head attention", "Twelve of those run side by side", "All 144 heads as a grid, each labelled by the pattern it shows"],
+					["Feed-forward", "Each position passes through 768 to 3072 and back", "Which neurons fire, and how few of them do"],
+					["Residual stream", "Every block adds; nothing is replaced", "The logit lens — the model's running guess after each layer"],
+					["Unembedding", "The final vector is scored against all 50,257 tokens", "The output distribution and its entropy"],
+				],
+			),
+			heading("The arithmetic, in full"),
+			paragraph("The part of a transformer people most want explained is attention, and it is also the part that explanations most often wave at. So the project walks one head's computation end to end with the real numbers: the query vector, the dot product against every key, the division by the square root of the head dimension, the causal mask, the exponentials, the sum they are divided by, and the weights that result."),
+			paragraph("Only six of the sixty-four dimensions are displayed, and the page says so — the dot product itself is computed over all of them. The point is not that a reader should verify the multiplication by hand. It is that the shape of the operation becomes concrete: a number goes in, a scaling happens for a stated reason, a mask removes options, and a distribution comes out that sums to one."),
+			heading("What the examples were chosen to reveal"),
+			bullets(
+				"**'the cat the cat the cat the'** gives the clearest pattern in the set. One head puts over 99% of its weight on the token that followed the previous occurrence of the current word — the mechanism behind pattern completion.",
+				"**'1, 2, 3, 4,'** shows what confidence looks like: 87% on ' 5', and the entropy collapses.",
+				"**'unbelievable'** becomes un + bel + iev + able, and the merge trace shows why: 'able' was a frequent enough pair to merge early, 'iev' was not.",
+				"**'The keys to the cabinet are'** is a syntax test. The verb must agree with 'keys', not with the nearer 'cabinet', and attention at the final token reaches past the closer word.",
+				"**'The capital of France is'** exposes a limit rather than a strength. GPT-2 small ranks ' the' above ' Paris', which is a more honest thing to show than a cherry-picked success.",
+			),
+			heading("The logit lens"),
+			paragraph("The most persuasive visualisation in the project is also the simplest. Because every block only adds to the residual stream, that stream is always in the space the output layer reads from — so the model's prediction can be decoded partway up the stack rather than only at the end."),
+			paragraph("Doing that at each of the twelve layers turns depth from an abstraction into something observable. On the repetition example the early layers produce noise, the middle layers settle on a plausible but wrong word, and around layer nine the correct answer appears and then sharpens to 90%. Nobody designed that progression; it is what the trained network does."),
+			heading("Three models, one skeleton"),
+			paragraph("The project also sets GPT-2 beside BERT and LLaMA, and the useful observation is how little separates them. Attention, residual connections and the feed-forward sandwich are the same in all three. What differs is a short list of substitutions."),
+			table(
+				["Aspect", "GPT-2", "BERT", "LLaMA"],
+				[
+					["Direction", "Left to right", "Both directions", "Left to right"],
+					["Position", "Learned, added at input", "Learned, added at input", "Rotary, applied inside attention"],
+					["Normalisation", "LayerNorm before the block", "LayerNorm after the block", "RMSNorm before the block"],
+					["Activation", "GELU", "GELU", "SwiGLU"],
+					["Attention heads", "12 full heads", "12 full heads", "32 query heads over 8 key/value groups"],
+				],
+			),
+			paragraph("The most consequential row is the first. Removing the causal mask is a one-line change, and it converts a text generator into a model that cannot generate text at all but is markedly better at classification. Architecture and purpose are that tightly linked."),
+			heading("Why implement the model by hand"),
+			paragraph("Calling a library would have produced the same predictions in a fraction of the code. It would not have produced the intermediates. A library is built to return an answer and discard the working, and the working is the entire subject here — so the forward pass was written out longhand, which made every intermediate value available and doubled as a check that the explanations match the implementation."),
+			paragraph("It is validated the obvious way: given '1, 2, 3, 4,' it answers ' 5' with 87% confidence, attention rows sum to one, and the masked upper triangle is exactly zero. If the numpy were wrong, none of those would hold."),
+			heading("What this project does not claim"),
+			bullets(
+				"**Attention weights are not explanations.** They show where information was read from. That is a real constraint on what the model could have used, and it is not the same as why the answer came out as it did.",
+				"**Head labels are descriptions, not roles.** Nothing assigned a head its job during training; the labels were inferred from the matrices afterwards, and the same head behaves differently on another sentence.",
+				"**GPT-2 small is not a current model.** It is far smaller than anything deployed today. It was chosen because its architecture is the one everything else varies from, and because it is small enough to show completely.",
+			),
+			heading("What it costs"),
+			table(
+				["Resource", "At build time", "At runtime"],
+				[
+					["Model weights", "548 MB, downloaded once", "None — never loaded"],
+					["Dependencies", "numpy and a regex library", "FastAPI only"],
+					["Memory", "Around 600 MB during the forward passes", "A few hundred kilobytes of cached JSON"],
+					["Time per sentence", "About two seconds", "A file read"],
+					["Data produced", "648 KB written", "Under 80 KB per example"],
+				],
+			),
+			paragraph("Precomputation is usually framed as a performance trick. Here it is what makes the project possible at all on the hardware it runs on, and it costs nothing pedagogically — a fixed set of well-chosen examples teaches more reliably than an arbitrary one ever would."),
+		],
+	},
 ]
 
 

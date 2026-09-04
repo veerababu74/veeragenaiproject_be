@@ -18,7 +18,7 @@ from Authentication.database import close_database, users
 from Authentication.router import router as authentication_router
 from Authentication.security import decode_access_token, password_hash
 from Admin.router import public_router as landing_router, router as admin_router
-from Admin.landing import ensure_advanced_rag_project, ensure_agent_orchestration_project, ensure_basic_rag_project, ensure_chunking_lab_project, ensure_google_workspace_agent_project, ensure_graph_rag_project, migrate_project_catalog
+from Admin.landing import ensure_advanced_rag_project, ensure_agent_orchestration_project, ensure_basic_rag_project, ensure_chunking_lab_project, ensure_google_workspace_agent_project, ensure_graph_rag_project, ensure_inside_llm_project, ensure_simple_agent_project, migrate_project_catalog
 from Blog.router import public_router as blog_public_router, admin_router as blog_admin_router
 from Blog.project_guides import ensure_project_guides
 from advancedragapp import database as advanced_rag_database
@@ -81,6 +81,8 @@ async def initialize_mongodb():
 	await ensure_graph_rag_project()
 	await ensure_chunking_lab_project()
 	await ensure_agent_orchestration_project()
+	await ensure_simple_agent_project()
+	await ensure_inside_llm_project()
 	await ensure_project_guides()
 	if settings.admin_email_set:
 		await users.update_many(

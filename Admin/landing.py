@@ -115,6 +115,29 @@ AGENT_ORCHESTRATION_PROJECT = {
     "blog_slug": "how-multi-agent-orchestration-works",
 }
 
+INSIDE_LLM_PROJECT = {
+    "id": "inside-llm", "title": "Inside an LLM",
+    "summary": "Watch a real GPT-2 forward pass component by component — tokenization, embeddings, attention, feed-forward — with every number taken from the actual pretrained weights.",
+    "category": "Generative AI", "tags": ["Transformers", "Attention", "Interpretability", "Education", "GPT-2"],
+    "image_url": "https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&w=1400&q=85",
+    "image_alt": "A lattice of connected points suggesting the layers of a neural network",
+    "status": "available",
+    "featured": True, "show_public": True, "show_workspace": True, "display_order": 9,
+    "project_url": "#signin",
+    "blog_slug": "how-a-transformer-actually-works",
+}
+
+SIMPLE_AGENT_PROJECT = {
+    "id": "simple-agent", "title": "SimpleAgent — Tool Calling in the Open",
+    "summary": "Build one agent, attach up to ten tools, and watch it decide in real time: what it reasoned, which tool it picked, what came back, and in what order.",
+    "category": "Generative AI", "tags": ["Agents", "Tool Calling", "Observability", "LangGraph", "RAG"],
+    "image_url": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=85",
+    "image_alt": "Circuit traces representing an agent routing between tools", "status": "available",
+    "featured": True, "show_public": True, "show_workspace": True, "display_order": 8,
+    "project_url": "#signin",
+    "blog_slug": "how-simpleagent-chooses-tools",
+}
+
 
 DEFAULT_LANDING_CONTENT = {
     "brand_name": "Veera AI",
@@ -210,6 +233,8 @@ BUILT_IN_PROJECTS = (
     GRAPH_RAG_PROJECT,
     CHUNKING_LAB_PROJECT,
     AGENT_ORCHESTRATION_PROJECT,
+    SIMPLE_AGENT_PROJECT,
+    INSIDE_LLM_PROJECT,
 )
 
 PROJECT_DEFAULT_BLOGS = {
@@ -220,6 +245,8 @@ PROJECT_DEFAULT_BLOGS = {
     "chunking-lab": "chunking-strategies-visualizer",
     "graph-rag": "how-real-time-graph-rag-works",
     "agent-orchestration": "how-multi-agent-orchestration-works",
+    "simple-agent": "how-simpleagent-chooses-tools",
+    "inside-llm": "how-a-transformer-actually-works",
 }
 
 
@@ -324,6 +351,14 @@ async def ensure_chunking_lab_project():
 
 async def ensure_agent_orchestration_project():
     await _ensure_built_in_project(AGENT_ORCHESTRATION_PROJECT)
+
+
+async def ensure_simple_agent_project():
+    await _ensure_built_in_project(SIMPLE_AGENT_PROJECT)
+
+
+async def ensure_inside_llm_project():
+    await _ensure_built_in_project(INSIDE_LLM_PROJECT)
 
 
 async def save_project_catalog(content: ProjectCatalog, updated_by):
