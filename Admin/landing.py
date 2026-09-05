@@ -115,6 +115,42 @@ AGENT_ORCHESTRATION_PROJECT = {
     "blog_slug": "how-multi-agent-orchestration-works",
 }
 
+EMBED_LAB_PROJECT = {
+    "id": "embed-lab", "title": "Embedding & Retrieval Lab",
+    "summary": "Embed the same corpus with several models and watch them disagree about what a query means — the reason RAG returns the wrong chunk.",
+    "category": "RAG", "tags": ["Embeddings", "Retrieval", "Vector Search", "Evaluation"],
+    "image_url": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1400&q=85",
+    "image_alt": "A dense network of connected points suggesting vectors in a shared space",
+    "status": "available",
+    "featured": False, "show_public": True, "show_workspace": True, "display_order": 10,
+    "project_url": "#signin",
+    "blog_slug": "why-your-rag-returns-the-wrong-chunk",
+}
+
+DECODE_LAB_PROJECT = {
+    "id": "decode-lab", "title": "Decoding & Sampling Lab",
+    "summary": "Drag temperature, top-k and top-p across a real GPT-2 distribution and see exactly what each one removes.",
+    "category": "Generative AI", "tags": ["Sampling", "Temperature", "Top-p", "GPT-2", "Education"],
+    "image_url": "https://images.unsplash.com/photo-1517420704952-d9f39e95b43e?auto=format&fit=crop&w=1400&q=85",
+    "image_alt": "Control sliders on a mixing desk",
+    "status": "available",
+    "featured": True, "show_public": True, "show_workspace": True, "display_order": 11,
+    "project_url": "#signin",
+    "blog_slug": "what-temperature-actually-does",
+}
+
+GUARD_LAB_PROJECT = {
+    "id": "guard-lab", "title": "Guardrails & Injection Lab",
+    "summary": "See which prompt-injection and PII patterns an input filter catches — and watch a polite rephrase walk straight past it.",
+    "category": "Generative AI", "tags": ["Security", "Prompt Injection", "PII", "Guardrails", "OWASP"],
+    "image_url": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1400&q=85",
+    "image_alt": "A padlock over a field of code, representing input filtering",
+    "status": "available",
+    "featured": False, "show_public": True, "show_workspace": True, "display_order": 12,
+    "project_url": "#signin",
+    "blog_slug": "what-input-filtering-catches",
+}
+
 INSIDE_LLM_PROJECT = {
     "id": "inside-llm", "title": "Inside an LLM",
     "summary": "Watch a real GPT-2 forward pass component by component — tokenization, embeddings, attention, feed-forward — with every number taken from the actual pretrained weights.",
@@ -235,6 +271,9 @@ BUILT_IN_PROJECTS = (
     AGENT_ORCHESTRATION_PROJECT,
     SIMPLE_AGENT_PROJECT,
     INSIDE_LLM_PROJECT,
+    EMBED_LAB_PROJECT,
+    DECODE_LAB_PROJECT,
+    GUARD_LAB_PROJECT,
 )
 
 PROJECT_DEFAULT_BLOGS = {
@@ -247,6 +286,9 @@ PROJECT_DEFAULT_BLOGS = {
     "agent-orchestration": "how-multi-agent-orchestration-works",
     "simple-agent": "how-simpleagent-chooses-tools",
     "inside-llm": "how-a-transformer-actually-works",
+    "embed-lab": "why-your-rag-returns-the-wrong-chunk",
+    "decode-lab": "what-temperature-actually-does",
+    "guard-lab": "what-input-filtering-catches",
 }
 
 
@@ -359,6 +401,11 @@ async def ensure_simple_agent_project():
 
 async def ensure_inside_llm_project():
     await _ensure_built_in_project(INSIDE_LLM_PROJECT)
+
+
+async def ensure_lab_projects():
+    for project in (EMBED_LAB_PROJECT, DECODE_LAB_PROJECT, GUARD_LAB_PROJECT):
+        await _ensure_built_in_project(project)
 
 
 async def save_project_catalog(content: ProjectCatalog, updated_by):
